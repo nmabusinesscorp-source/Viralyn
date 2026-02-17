@@ -14,7 +14,13 @@ if not N8N_KEY:
     sys.exit(1)
 
 AIRTABLE_CRED = {"id": "YtjWlkMv0kUOReCD", "name": "Airtable Personal Access Token account"}
-BASE_ID = "appALAIPKLlErfD1E"
+BASE_ID = "appGeibRFjtIvEGll"  # Content_Creator_Engine (V1 — active)
+
+# V1 table IDs
+CUSTOMER_DATA_TABLE = "tblNie3b1sdkWVhuA"
+CUSTOMER_SETTINGS_TABLE = "tblJfTazPuRQVVTGa"
+PRODUCTS_TABLE = "tblKC0gfX8UmbhpOH"
+CONTENT_PIPELINE_TABLE = "tbl6OlJbVl9XV8Tw3"
 
 def n8n_request(method, path, data=None):
     url = f"{N8N_URL}/{path}"
