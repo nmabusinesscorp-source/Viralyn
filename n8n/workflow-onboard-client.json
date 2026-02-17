@@ -1,0 +1,181 @@
+{
+  "name": "Viralyn — Onboard Client",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "onboard-client",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-onboard",
+      "name": "Webhook Onboard",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "onboard-client"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Customers"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Customer_ID": "={{ $json.body.customer.Customer_ID }}",
+            "Customer_Name": "={{ $json.body.customer.Customer_Name }}",
+            "Customer_Market": "={{ $json.body.customer.Customer_Market }}",
+            "Customer_Adress": "={{ $json.body.customer.Customer_Adress }}",
+            "CTA": "={{ $json.body.customer.CTA }}",
+            "Mood": "={{ $json.body.customer.Mood }}",
+            "Visual_type": "={{ $json.body.customer.Visual_type }}",
+            "Color_Set": "={{ $json.body.customer.Color_Set }}",
+            "Post_Frequency_Weekly": "={{ $json.body.customer.Post_Frequency_Weekly }}",
+            "Prompt_Text": "={{ $json.body.customer.Prompt_Text }}",
+            "Customer_Status": "={{ $json.body.customer.Customer_Status }}",
+            "Source_URL": "={{ $json.body.customer.Source_URL }}",
+            "Platform": "={{ $json.body.customer.Platform }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-customer",
+      "name": "Create Customer",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [480, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify($json.body.products) }}",
+        "options": {}
+      },
+      "id": "split-products",
+      "name": "Split Products",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [480, 440]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Products"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Product_Name": "={{ $json.Product_Name }}",
+            "Description": "={{ $json.Description }}",
+            "Category": "={{ $json.Category }}",
+            "Price": "={{ $json.Price }}",
+            "Is_Active": "={{ $json.Is_Active }}",
+            "Visual_Keywords": "={{ $json.Visual_Keywords }}",
+            "Customer_ID": "={{ $('Webhook Onboard').item.json.body.customer.Customer_ID }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-products",
+      "name": "Create Products",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [720, 440],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Wait for Both",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, customer_id: $('Webhook Onboard').item.json.body.customer.Customer_ID, products_created: $('Split Products').all().length }) }}"
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Onboard": {
+      "main": [
+        [
+          { "node": "Create Customer", "type": "main", "index": 0 },
+          { "node": "Split Products", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Customer": {
+      "main": [
+        [
+          { "node": "Wait for Both", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Split Products": {
+      "main": [
+        [
+          { "node": "Create Products", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Products": {
+      "main": [
+        [
+          { "node": "Wait for Both", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Wait for Both": {
+      "main": [
+        [
+          { "node": "Respond Success", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "viralyn" },
+    { "name": "onboarding" }
+  ]
+}

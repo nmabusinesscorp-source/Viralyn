@@ -1,0 +1,180 @@
+{
+  "name": "Viralyn — QA Result",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qa-result",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-qa",
+      "name": "Webhook QA",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "qa-result"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Posts"
+        },
+        "filterByFormula": "={Post_ID} = '{{ $json.body.post_id }}'",
+        "options": {
+          "limit": 1
+        }
+      },
+      "id": "find-post",
+      "name": "Find Post",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [480, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-found",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-post-exists",
+      "name": "Post Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Posts"
+        },
+        "id": "={{ $('Find Post').item.json.id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "QA_Verdict": "={{ $('Webhook QA').item.json.body.verdict }}",
+            "QA_Score": "={{ $('Webhook QA').item.json.body.score }}",
+            "QA_Feedback": "={{ $('Webhook QA').item.json.body.feedback }}",
+            "QA_Suggestions": "={{ JSON.stringify($('Webhook QA').item.json.body.suggestions || []) }}",
+            "Post_Status": "={{ $('Webhook QA').item.json.body.new_status }}",
+            "Alternative_Post": "={{ $('Webhook QA').item.json.body.alternative_post || '' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-post",
+      "name": "Update Post",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [960, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, post_id: $('Webhook QA').item.json.body.post_id, verdict: $('Webhook QA').item.json.body.verdict, updated_record: $json.id }) }}"
+      },
+      "id": "respond-updated",
+      "name": "Respond Updated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'Post not found', post_id: $('Webhook QA').item.json.body.post_id }) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "respond-not-found",
+      "name": "Respond Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 440]
+    }
+  ],
+  "connections": {
+    "Webhook QA": {
+      "main": [
+        [
+          { "node": "Find Post", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Find Post": {
+      "main": [
+        [
+          { "node": "Post Found?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Post Found?": {
+      "main": [
+        [
+          { "node": "Update Post", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Respond Not Found", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Update Post": {
+      "main": [
+        [
+          { "node": "Respond Updated", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "viralyn" },
+    { "name": "qa" }
+  ]
+}
