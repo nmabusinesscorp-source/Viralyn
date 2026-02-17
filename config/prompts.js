@@ -90,7 +90,7 @@ score = (product_named * 0.25) + (cta_present * 0.15) + (length * 0.10) + (tone 
 Verdicts :
 - score >= 7.0 → verdict: "PASS", new_status: "Prêt à publier"
 - score >= 5.0 et < 7.0 → verdict: "WARN", new_status: "Prêt à publier"
-- score < 5.0 → verdict: "FAIL", new_status: "À revoir"
+- score < 5.0 → verdict: "FAIL", new_status: "Edité"
 
 Si FAIL : propose un post alternatif qui corrige les problèmes identifiés.
 Si WARN : donne des suggestions d'amélioration.
@@ -100,7 +100,7 @@ Retourne TOUJOURS un JSON valide dans un bloc \`\`\`json ... \`\`\` avec cette s
   "post_id": "string (l'ID du post reçu en input)",
   "verdict": "PASS" | "WARN" | "FAIL",
   "score": number (1 décimale),
-  "new_status": "Prêt à publier" | "À revoir",
+  "new_status": "Prêt à publier" | "Edité",
   "feedback": "string (résumé en 1-2 phrases)",
   "details": {
     "product_named": { "score": number, "note": "string" },

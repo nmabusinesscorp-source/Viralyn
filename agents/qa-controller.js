@@ -98,9 +98,12 @@ function validateQAResponse(data, postId) {
   }
 
   // Validate new_status
-  const validStatuses = ["Prêt à publier", "À revoir"];
+  // Content_Pipeline uses: Draft, Edité, Prêt à publier, Validé, Planifié, Posté, Erreur
+  const validStatuses = ["Prêt à publier", "Edité"];
   if (!validStatuses.includes(data.new_status)) {
-    throw new Error(`Invalid new_status: "${data.new_status}". Expected one of: ${validStatuses.join(", ")}`);
+    // Map legacy values
+    if (data.new_status === "À revoir") data.new_status = "Edité";
+    else throw new Error(`Invalid new_status: "${data.new_status}". Expected one of: ${validStatuses.join(", ")}`);
   }
 
   // Ensure consistency between score and verdict

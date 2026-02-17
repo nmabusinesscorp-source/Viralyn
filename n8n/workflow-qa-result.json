@@ -26,9 +26,9 @@
         "table": {
           "__rl": true,
           "mode": "id",
-          "value": "Posts"
+          "value": "Content_Pipeline"
         },
-        "filterByFormula": "={Post_ID} = '{{ $json.body.post_id }}'",
+        "filterByFormula": "=RECORD_ID() = '{{ $json.body.post_id }}'",
         "options": {
           "limit": 1
         }
@@ -83,7 +83,7 @@
         "table": {
           "__rl": true,
           "mode": "id",
-          "value": "Posts"
+          "value": "Content_Pipeline"
         },
         "id": "={{ $('Find Post').item.json.id }}",
         "columns": {
@@ -93,7 +93,7 @@
             "QA_Score": "={{ $('Webhook QA').item.json.body.score }}",
             "QA_Feedback": "={{ $('Webhook QA').item.json.body.feedback }}",
             "QA_Suggestions": "={{ JSON.stringify($('Webhook QA').item.json.body.suggestions || []) }}",
-            "Post_Status": "={{ $('Webhook QA').item.json.body.new_status }}",
+            "Status": "={{ $('Webhook QA').item.json.body.new_status }}",
             "Alternative_Post": "={{ $('Webhook QA').item.json.body.alternative_post || '' }}"
           }
         },
@@ -125,7 +125,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: false, error: 'Post not found', post_id: $('Webhook QA').item.json.body.post_id }) }}",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'Post not found in Content_Pipeline', post_id: $('Webhook QA').item.json.body.post_id }) }}",
         "options": {
           "responseCode": 404
         }

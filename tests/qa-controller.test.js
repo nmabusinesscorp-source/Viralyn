@@ -18,8 +18,14 @@ describe("validateQAResponse", () => {
   });
 
   test("passes with valid FAIL response", () => {
-    const data = { ...validData(), verdict: "FAIL", score: 3.5, new_status: "À revoir" };
+    const data = { ...validData(), verdict: "FAIL", score: 3.5, new_status: "Edité" };
     expect(() => validateQAResponse(data, "POST001")).not.toThrow();
+  });
+
+  test("maps legacy À revoir status to Edité", () => {
+    const data = { ...validData(), verdict: "FAIL", score: 3.5, new_status: "À revoir" };
+    validateQAResponse(data, "POST001");
+    expect(data.new_status).toBe("Edité");
   });
 
   test("passes with valid WARN response", () => {
@@ -69,7 +75,7 @@ describe("validateQAResponse", () => {
 
   test("warns on score/verdict mismatch (low score but not FAIL)", () => {
     const spy = jest.spyOn(console, "warn").mockImplementation();
-    const data = { ...validData(), verdict: "WARN", score: 3.0, new_status: "À revoir" };
+    const data = { ...validData(), verdict: "WARN", score: 3.0, new_status: "Edité" };
     validateQAResponse(data, "POST001");
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("mismatch"));
     spy.mockRestore();
