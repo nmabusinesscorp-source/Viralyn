@@ -88,13 +88,21 @@ function extractJSON(text) {
   // Try to extract JSON from markdown code block first
   const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
-    return JSON.parse(codeBlockMatch[1].trim());
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch (err) {
+      throw new Error(`Failed to parse JSON from code block: ${err.message}`);
+    }
   }
 
   // Try to find a raw JSON object
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (err) {
+      throw new Error(`Failed to parse raw JSON from response: ${err.message}`);
+    }
   }
 
   throw new Error("No valid JSON found in agent response");

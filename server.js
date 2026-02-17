@@ -1,5 +1,18 @@
 require("dotenv").config();
 
+// ─── Startup env validation ─────────────────────────────────────
+const REQUIRED_ENV = ["ANTHROPIC_API_KEY", "N8N_WEBHOOK_BASE_URL"];
+const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`[Viralyn] FATAL: Missing required env vars: ${missing.join(", ")}`);
+  console.error("[Viralyn] Check your .env file or environment configuration.");
+  process.exit(1);
+}
+
+if (!process.env.SLACK_WEBHOOK_URL) {
+  console.warn("[Viralyn] SLACK_WEBHOOK_URL not set — Slack notifications will be disabled");
+}
+
 const express = require("express");
 const { onboard } = require("./agents/onboarder");
 const { evaluatePost } = require("./agents/qa-controller");
@@ -29,10 +42,13 @@ app.post("/agent/onboard", async (req, res) => {
   try {
     console.log(`[Server] POST /agent/onboard — url=${url}, name=${name || "N/A"}`);
     const result = await onboard({ url, name });
+    if (!result.success) {
+      return res.status(503).json({ error: "Onboarding data could not be saved to Airtable", details: result.n8nResult });
+    }
     res.json(result);
   } catch (err) {
     console.error(`[Server] Onboarding error: ${err.message}`);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -47,10 +63,13 @@ app.post("/agent/qa", async (req, res) => {
   try {
     console.log(`[Server] POST /agent/qa — post_id=${post_id}`);
     const result = await evaluatePost({ post_id, post_text, prompt_visual, product_name, customer });
+    if (!result.success) {
+      return res.status(503).json({ error: "QA result could not be saved to Airtable", details: result.n8nResult });
+    }
     res.json(result);
   } catch (err) {
     console.error(`[Server] QA error: ${err.message}`);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
