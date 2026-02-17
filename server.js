@@ -14,6 +14,7 @@ if (!process.env.SLACK_WEBHOOK_URL) {
 }
 
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const { onboard } = require("./agents/onboarder");
 const { evaluatePost } = require("./agents/qa-controller");
 
@@ -21,6 +22,17 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// ─── Rate limiting ──────────────────────────────────────────────
+// Agent endpoints call Claude API (~$0.05/call) — protect against abuse
+const agentLimiter = rateLimit({
+  windowMs: 60_000, // 1 minute
+  max: 10,          // 10 calls per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+app.use("/agent/", agentLimiter);
 
 // ─── Health check ────────────────────────────────────────────────
 app.get("/health", (req, res) => {

@@ -150,4 +150,4 @@ function buildSlackNotification(data) {
   return msg;
 }
 
-module.exports = { onboard };
+module.exports = { onboard, extractJSON, validateOnboardingData, buildSlackNotification };

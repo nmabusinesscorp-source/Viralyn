@@ -133,4 +133,4 @@ function buildSlackNotification(data, customer) {
   return msg;
 }
 
-module.exports = { evaluatePost };
+module.exports = { evaluatePost, validateQAResponse, buildSlackNotification };
