@@ -261,19 +261,25 @@ Webhook → Update Content_Pipeline with QA verdict.
 
 ### Required credentials in n8n:
 
-| Credential            | Type                         | Used by                    |
-|-----------------------|------------------------------|----------------------------|
-| Airtable              | Personal Access Token        | All Airtable nodes         |
-| Google Gemini         | Google PaLM API Key          | Image + Video generation   |
-| *(optional)* Blotato  | Blotato API Key              | Auto-publish to social     |
+| Credential            | Type                         | Used by                        |
+|-----------------------|------------------------------|--------------------------------|
+| Airtable              | Personal Access Token        | All Airtable nodes             |
+| Google Gemini         | Google PaLM API Key          | Image + Video generation       |
+| *(optional)* Blotato  | Blotato API Key              | Auto-publish to social         |
 
-### Environment Variables (n8n)
-```
-AIRTABLE_BASE_ID=appGeibRFjtIvEGll
-ANTHROPIC_API_KEY=sk-ant-...
-VIRALYN_SERVER_URL=http://localhost:3000
-N8N_WEBHOOK_BASE_URL=https://n8n.srv1000420.hstgr.cloud/webhook
-```
+> **Note :** Les env vars n8n (`$env.XXX`) ne sont disponibles que sur le plan Enterprise.
+> Toutes les valeurs (Base ID, URLs) sont hardcodées directement dans les noeuds.
+> Seule la clé Anthropic API doit être remplacée manuellement dans le noeud
+> **"Claude — Generate Text"** du workflow Generate Post (`YOUR_ANTHROPIC_API_KEY`).
+
+### Valeurs hardcodées dans les workflows
+
+| Valeur                    | Emplacement dans les noeuds            |
+|---------------------------|----------------------------------------|
+| `appGeibRFjtIvEGll`       | Tous les noeuds Airtable (Base ID)     |
+| `YOUR_ANTHROPIC_API_KEY`  | Claude — Generate Text (header x-api-key) |
+| `http://localhost:3000`   | Trigger QA (URL du serveur Express)    |
+| `https://n8n.srv1000420.hstgr.cloud/webhook/generate-post` | Content Scheduler → Call Generate Post |
 
 ---
 

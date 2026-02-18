@@ -21,7 +21,7 @@
         "base": {
           "__rl": true,
           "mode": "id",
-          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+          "value": "appGeibRFjtIvEGll"
         },
         "table": {
           "__rl": true,
@@ -78,7 +78,7 @@
         "base": {
           "__rl": true,
           "mode": "id",
-          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+          "value": "appGeibRFjtIvEGll"
         },
         "table": {
           "__rl": true,

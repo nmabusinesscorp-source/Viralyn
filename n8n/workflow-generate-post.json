@@ -19,7 +19,7 @@
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Customers" },
         "filterByFormula": "={Customer_ID} = '{{ $json.body.customer_id }}'",
         "options": { "limit": 1 }
@@ -35,7 +35,7 @@
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Products" },
         "filterByFormula": "=AND({Customer_ID} = '{{ $('Webhook').item.json.body.customer_id }}', {Is_Active} = TRUE())",
         "sort": [{ "field": "Last_Featured_Date", "direction": "asc" }],
@@ -67,7 +67,7 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "x-api-key", "value": "YOUR_ANTHROPIC_API_KEY" },
             { "name": "anthropic-version", "value": "2023-06-01" },
             { "name": "content-type", "value": "application/json" }
           ]
@@ -191,7 +191,7 @@
     {
       "parameters": {
         "operation": "create",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Content_Pipeline" },
         "columns": {
           "mappingMode": "defineBelow",
@@ -224,7 +224,7 @@
     {
       "parameters": {
         "operation": "update",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Products" },
         "id": "={{ $('Build Pipeline Record').first().json._product_record_id }}",
         "columns": {
@@ -246,7 +246,7 @@
     {
       "parameters": {
         "operation": "create",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Publishing_Slot" },
         "columns": {
           "mappingMode": "defineBelow",
@@ -270,7 +270,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.VIRALYN_SERVER_URL || 'http://localhost:3000' }}/agent/qa",
+        "url": "http://localhost:3000/agent/qa",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"post_id\": \"{{ $('Create Content_Pipeline').first().json.id }}\",\n  \"post_text\": {{ JSON.stringify($('Build Pipeline Record').first().json.Post) }},\n  \"prompt_visual\": {{ JSON.stringify($('Build Pipeline Record').first().json.Prompt_Visual) }},\n  \"product_name\": {{ JSON.stringify($('Build Pipeline Record').first().json.Product_Name) }},\n  \"customer\": {\n    \"Customer_Name\": {{ JSON.stringify($('Build Pipeline Record').first().json.Customer_Name) }},\n    \"Customer_ID\": {{ JSON.stringify($('Build Pipeline Record').first().json.Customer_ID) }}\n  }\n}",

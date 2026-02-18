@@ -22,7 +22,7 @@
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Customers" },
         "filterByFormula": "={Customer_Status} = 'Actif'",
         "options": {}
@@ -38,7 +38,7 @@
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Slot_Settings" },
         "filterByFormula": "={Active} = TRUE()",
         "options": {}
@@ -54,7 +54,7 @@
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
         "table": { "__rl": true, "mode": "id", "value": "Customer_Campaigns" },
         "filterByFormula": "=AND({Status} = 'Active', {Posts_Generated} < {Posts_Needed})",
         "options": {}
@@ -115,7 +115,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/generate-post",
+        "url": "https://n8n.srv1000420.hstgr.cloud/webhook/generate-post",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"customer_id\": {{ JSON.stringify($json.customer_id) }},\n  \"format\": {{ JSON.stringify($json.format) }},\n  \"source\": {{ JSON.stringify($json.source) }},\n  \"campaign_id\": {{ JSON.stringify($json.campaign_id) }},\n  \"product_name\": {{ JSON.stringify($json.product_name) }},\n  \"brief\": {{ JSON.stringify($json.brief) }},\n  \"slot_time\": {{ JSON.stringify($json.slot_time) }}\n}",
