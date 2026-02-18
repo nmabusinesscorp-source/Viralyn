@@ -8,11 +8,11 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook-onboard",
+      "id": "a1000001-0001-0001-0001-000000000001",
       "name": "Webhook Onboard",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [240, 304],
       "webhookId": "onboard-client"
     },
     {
@@ -33,45 +33,75 @@
           "value": {
             "Customer_ID": "={{ $json.body.customer.Customer_ID }}",
             "Customer_Name": "={{ $json.body.customer.Customer_Name }}",
-            "Customer_Market": "={{ $json.body.customer.Customer_Market }}",
+            "Customer_Status": "Prospect",
             "Customer_Adress": "={{ $json.body.customer.Customer_Adress }}",
+            "Customer_Market": "={{ $json.body.customer.Customer_Market }}",
+            "Customer_Website": "={{ $json.body.customer.Source_URL }}",
+            "Customer_Contact": "={{ $json.body.customer.Customer_Contact }}",
+            "Customer_Email": "={{ $json.body.customer.Customer_Email }}",
+            "Customer_Phone": "={{ $json.body.customer.Customer_Phone }}",
             "CTA": "={{ $json.body.customer.CTA }}",
             "Mood": "={{ $json.body.customer.Mood }}",
             "Visual_type": "={{ $json.body.customer.Visual_type }}",
+            "Visual_to_Video_type": "={{ $json.body.customer.Visual_to_Video_type }}",
             "Color_Set": "={{ $json.body.customer.Color_Set }}",
-            "Post_Frequency_Weekly": "={{ $json.body.customer.Post_Frequency_Weekly }}",
-            "Prompt_Text": "={{ $json.body.customer.Prompt_Text }}",
-            "Customer_Status": "={{ $json.body.customer.Customer_Status }}",
-            "Source_URL": "={{ $json.body.customer.Source_URL }}",
-            "Logo_URL": "={{ $json.body.customer.Logo_URL }}",
-            "Platform": "={{ $json.body.customer.Platform }}"
+            "Target_Personna": "={{ $json.body.customer.Target_Personna }}",
+            "Blotato_Client_ID": "={{ $json.body.customer.Blotato_Client_ID }}",
+            "Telegram_Chat_ID": "={{ $json.body.customer.Telegram_Chat_ID }}"
           }
         },
         "options": {}
       },
-      "id": "airtable-customer",
+      "id": "a1000001-0001-0001-0001-000000000002",
       "name": "Create Customer",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [480, 200],
+      "position": [528, 184],
       "credentials": {
         "airtableTokenApi": {
-          "id": "REPLACE_WITH_CREDENTIAL_ID",
-          "name": "Airtable Personal Access Token"
+          "id": "YtjWlkMv0kUOReCD",
+          "name": "Airtable Personal Access Token account"
         }
       }
     },
     {
       "parameters": {
-        "mode": "raw",
-        "jsonOutput": "={{ JSON.stringify($json.body.products) }}",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "products",
+              "value": "={{ $json.body.products }}",
+              "type": "array"
+            },
+            {
+              "id": "p2",
+              "name": "customer_id",
+              "value": "={{ $json.body.customer.Customer_ID }}",
+              "type": "string"
+            }
+          ]
+        },
         "options": {}
       },
-      "id": "split-products",
+      "id": "a1000001-0001-0001-0001-000000000004",
+      "name": "Set Products Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [528, 424]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "products",
+        "options": {
+          "include": "allOtherFields"
+        }
+      },
+      "id": "a1000001-0001-0001-0001-000000000005",
       "name": "Split Products",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [480, 440]
+      "position": [752, 424]
     },
     {
       "parameters": {
@@ -95,43 +125,34 @@
             "Price": "={{ $json.Price }}",
             "Is_Active": "={{ $json.Is_Active }}",
             "Visual_Keywords": "={{ $json.Visual_Keywords }}",
-            "Customer_ID": "={{ $('Webhook Onboard').item.json.body.customer.Customer_ID }}"
+            "Customer_ID": "={{ $json.customer_id }}"
           }
         },
         "options": {}
       },
-      "id": "airtable-products",
+      "id": "a1000001-0001-0001-0001-000000000006",
       "name": "Create Products",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [720, 440],
+      "position": [960, 424],
       "credentials": {
         "airtableTokenApi": {
-          "id": "REPLACE_WITH_CREDENTIAL_ID",
-          "name": "Airtable Personal Access Token"
+          "id": "YtjWlkMv0kUOReCD",
+          "name": "Airtable Personal Access Token account"
         }
       }
     },
     {
       "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, customer_id: $(\"Webhook Onboard\").item.json.body.customer.Customer_ID, message: \"Customer and products created in unified Customers table\" }) }}",
         "options": {}
       },
-      "id": "merge-results",
-      "name": "Wait for Both",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [960, 300]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: true, customer_id: $('Webhook Onboard').item.json.body.customer.Customer_ID, products_created: $('Split Products').all().length }) }}"
-      },
-      "id": "respond-success",
+      "id": "a1000001-0001-0001-0001-000000000007",
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1200, 300]
+      "position": [960, 184]
     }
   ],
   "connections": {
@@ -139,14 +160,21 @@
       "main": [
         [
           { "node": "Create Customer", "type": "main", "index": 0 },
-          { "node": "Split Products", "type": "main", "index": 0 }
+          { "node": "Set Products Data", "type": "main", "index": 0 }
         ]
       ]
     },
     "Create Customer": {
       "main": [
         [
-          { "node": "Wait for Both", "type": "main", "index": 0 }
+          { "node": "Respond Success", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Set Products Data": {
+      "main": [
+        [
+          { "node": "Split Products", "type": "main", "index": 0 }
         ]
       ]
     },
@@ -154,20 +182,6 @@
       "main": [
         [
           { "node": "Create Products", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Create Products": {
-      "main": [
-        [
-          { "node": "Wait for Both", "type": "main", "index": 1 }
-        ]
-      ]
-    },
-    "Wait for Both": {
-      "main": [
-        [
-          { "node": "Respond Success", "type": "main", "index": 0 }
         ]
       ]
     }
