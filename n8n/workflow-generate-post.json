@@ -62,31 +62,39 @@
 
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "x-api-key", "value": "YOUR_ANTHROPIC_API_KEY" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "content-type", "value": "application/json" }
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-5-20250929",
+          "mode": "list",
+          "cachedResultName": "claude-sonnet-4-5-20250929"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.claude_user }}",
+              "role": "user"
+            }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5-20250929\",\n  \"max_tokens\": 1500,\n  \"system\": {{ JSON.stringify($json.claude_system) }},\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.claude_user) }}\n    }\n  ]\n}",
-        "options": { "timeout": 30000 }
+        "simplify": true,
+        "options": {
+          "system": "={{ $json.claude_system }}",
+          "maxTokens": 1500
+        }
       },
       "id": "http-claude",
       "name": "Claude — Generate Text",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [780, 400]
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [780, 400],
+      "credentials": { "anthropicApi": { "id": "REPLACE", "name": "Anthropic" } }
     },
 
     {
       "parameters": {
-        "jsCode": "// ─── Parse Claude Response ──────────────────────────────────\nconst prev = $('Pick Product & Build Prompts').first().json;\nconst claudeResponse = $input.first().json;\n\n// Extract text from Claude response\nconst responseText = claudeResponse.content?.[0]?.text || '';\n\n// Parse JSON from response\nlet parsed;\ntry {\n  const jsonMatch = responseText.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  // Fallback: use the raw text as post and customer prompts for visual\n  parsed = {\n    post_text: responseText.substring(0, 500),\n    prompt_visual: prev.fallback_prompt_visual,\n    prompt_video: prev.fallback_prompt_video\n  };\n}\n\nreturn [{\n  json: {\n    ...prev,\n    post_text: parsed.post_text || '',\n    prompt_visual: parsed.prompt_visual || prev.fallback_prompt_visual,\n    prompt_video: parsed.prompt_video || prev.fallback_prompt_video,\n    format: prev.format\n  }\n}];"
+        "jsCode": "// ─── Parse Claude Response ──────────────────────────────────\nconst prev = $('Pick Product & Build Prompts').first().json;\nconst claudeOutput = $input.first().json;\n\n// Native Anthropic node returns content[0].text\nconst responseText = claudeOutput.content?.[0]?.text || claudeOutput.text || '';\n\n// Parse JSON from response\nlet parsed;\ntry {\n  const jsonMatch = responseText.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  parsed = {\n    post_text: responseText.substring(0, 500),\n    prompt_visual: prev.fallback_prompt_visual,\n    prompt_video: prev.fallback_prompt_video\n  };\n}\n\nreturn [{\n  json: {\n    ...prev,\n    post_text: parsed.post_text || '',\n    prompt_visual: parsed.prompt_visual || prev.fallback_prompt_visual,\n    prompt_video: parsed.prompt_video || prev.fallback_prompt_video,\n    format: prev.format\n  }\n}];"
       },
       "id": "code-parse-claude",
       "name": "Parse Claude Response",
