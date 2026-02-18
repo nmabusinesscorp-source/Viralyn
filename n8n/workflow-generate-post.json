@@ -216,7 +216,8 @@
             "Source": "={{ $json.Source }}",
             "Video_Status": "={{ $json.Video_Status }}",
             "PublishAt": "={{ $json.PublishAt }}",
-            "URL_Visual": "={{ $json.URL_Visual }}"
+            "URL_Visual": "={{ $json.URL_Visual }}",
+            "Generated_Visual": "={{ $json.URL_Visual ? JSON.stringify([{ url: $json.URL_Visual }]) : '' }}"
           }
         },
         "options": {}
@@ -277,24 +278,77 @@
 
     {
       "parameters": {
-        "method": "POST",
-        "url": "http://localhost:3000/agent/qa",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"post_id\": \"{{ $('Create Content_Pipeline').first().json.id }}\",\n  \"post_text\": {{ JSON.stringify($('Build Pipeline Record').first().json.Post) }},\n  \"prompt_visual\": {{ JSON.stringify($('Build Pipeline Record').first().json.Prompt_Visual) }},\n  \"product_name\": {{ JSON.stringify($('Build Pipeline Record').first().json.Product_Name) }},\n  \"customer\": {\n    \"Customer_Name\": {{ JSON.stringify($('Build Pipeline Record').first().json.Customer_Name) }},\n    \"Customer_ID\": {{ JSON.stringify($('Build Pipeline Record').first().json.Customer_ID) }}\n  }\n}",
-        "options": { "timeout": 60000 }
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-5-20250929",
+          "mode": "list",
+          "cachedResultName": "claude-sonnet-4-5-20250929"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ 'Évalue la qualité du post suivant.\\n\\nPOST ID : ' + $('Create Content_Pipeline').first().json.id + '\\n\\nTEXTE DU POST :\\n\"\"\"\\n' + $('Build Pipeline Record').first().json.Post + '\\n\"\"\"\\n\\nPROMPT VISUEL :\\n\"\"\"\\n' + ($('Build Pipeline Record').first().json.Prompt_Visual || 'Non fourni') + '\\n\"\"\"\\n\\nPRODUIT MIS EN AVANT : ' + ($('Build Pipeline Record').first().json.Product_Name || 'Non spécifié') + '\\n\\nPARAMÈTRES CLIENT :\\n- Nom : ' + ($('Build Pipeline Record').first().json.Customer_Name || 'N/A') + '\\n- Customer_ID : ' + ($('Build Pipeline Record').first().json.Customer_ID || 'N/A') + '\\n\\nÉvalue chaque critère et retourne le JSON de résultat.' }}",
+              "role": "user"
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "system": "Tu es un contrôleur qualité pour des posts de réseaux sociaux.\nTu reçois un post + les paramètres du client et tu évalues la qualité.\n\nChecklist (score chaque critère sur 10) :\n1. product_named (poids 25%) — Le produit est-il nommé ?\n2. cta_present (poids 15%) — Le CTA est-il présent ?\n3. length (poids 10%) — Le texte fait entre 50 et 150 mots ?\n4. tone (poids 20%) — Le ton est cohérent avec le mood ?\n5. writing (poids 15%) — Qualité rédactionnelle ?\n6. visual_prompt (poids 15%) — Le prompt image est cohérent ?\n\nscore = (product_named * 0.25) + (cta_present * 0.15) + (length * 0.10) + (tone * 0.20) + (writing * 0.15) + (visual_prompt * 0.15)\n\nVerdicts :\n- score >= 7.0 → verdict: PASS, new_status: Prêt à publier\n- score >= 5.0 et < 7.0 → verdict: WARN, new_status: Prêt à publier\n- score < 5.0 → verdict: FAIL, new_status: Edité\n\nSi FAIL : propose un post alternatif.\nSi WARN : donne des suggestions.\n\nRetourne UNIQUEMENT un JSON valide dans un bloc ```json ... ``` avec : post_id, verdict, score, new_status, feedback, details, suggestions, alternative_post.",
+          "maxTokens": 1500
+        }
       },
-      "id": "http-qa",
-      "name": "Trigger QA",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2860, 400]
+      "id": "claude-qa",
+      "name": "Claude — QA Eval",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [2860, 280],
+      "credentials": { "anthropicApi": { "id": "REPLACE", "name": "Anthropic" } }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Parse QA response from Claude\nconst claudeOutput = $input.first().json;\nconst responseText = claudeOutput.content?.[0]?.text || claudeOutput.text || '';\nconst pipelineId = $('Create Content_Pipeline').first().json.id;\n\nlet parsed;\ntry {\n  const jsonMatch = responseText.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  parsed = JSON.parse((jsonMatch ? jsonMatch[1] : responseText).trim());\n} catch (e) {\n  parsed = { verdict: 'WARN', score: 5.0, new_status: 'Prêt à publier', feedback: 'QA parse error: ' + e.message, suggestions: [], alternative_post: '' };\n}\n\nparsed.post_id = pipelineId;\n\n// Validate verdict\nif (!['PASS', 'WARN', 'FAIL'].includes(parsed.verdict)) parsed.verdict = 'WARN';\nif (typeof parsed.score !== 'number') parsed.score = 5.0;\nif (!['Prêt à publier', 'Edité'].includes(parsed.new_status)) {\n  parsed.new_status = parsed.score >= 5.0 ? 'Prêt à publier' : 'Edité';\n}\n\nreturn [{ json: parsed }];"
+      },
+      "id": "code-parse-qa",
+      "name": "Parse QA Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 280]
+    },
+
+    {
+      "parameters": {
+        "operation": "update",
+        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
+        "table": { "__rl": true, "mode": "id", "value": "Content_Pipeline" },
+        "id": "={{ $json.post_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "QA_Verdict": "={{ $json.verdict }}",
+            "QA_Score": "={{ $json.score }}",
+            "QA_Feedback": "={{ $json.feedback }}",
+            "Status": "={{ $json.new_status }}",
+            "Alternative_Post": "={{ $json.alternative_post || '' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "at-update-qa",
+      "name": "Update QA Result",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [3300, 280],
+      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
     },
 
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({\n  success: true,\n  pipeline_record_id: $('Create Content_Pipeline').first().json.id,\n  customer_id: $('Build Pipeline Record').first().json.Customer_ID,\n  product_name: $('Build Pipeline Record').first().json.Product_Name,\n  format: $('Build Pipeline Record').first().json._format,\n  source: $('Build Pipeline Record').first().json.Source,\n  qa_result: $json\n}) }}"
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  pipeline_record_id: $('Create Content_Pipeline').first().json.id,\n  customer_id: $('Build Pipeline Record').first().json.Customer_ID,\n  product_name: $('Build Pipeline Record').first().json.Product_Name,\n  format: $('Build Pipeline Record').first().json._format,\n  source: $('Build Pipeline Record').first().json.Source,\n  qa_verdict: $('Parse QA Response').first().json.verdict,\n  qa_score: $('Parse QA Response').first().json.score\n}) }}"
       },
       "id": "respond-success",
       "name": "Respond Success",
@@ -311,7 +365,7 @@
       "typeVersion": 1,
       "position": [-60, 120],
       "parameters_extra": {
-        "content": "## Viralyn — Generate Post\n\n**Trigger:** Webhook POST /generate-post\n\n**Input:**\n```json\n{\n  \"customer_id\": \"LOS-04899\",\n  \"format\": \"image\" | \"video\",\n  \"source\": \"Rotation\" | \"Campaign\" | \"Telegram\",\n  \"product_name\": null,     // optional (auto-rotate if null)\n  \"campaign_id\": null,      // optional\n  \"brief\": null,            // optional\n  \"slot_time\": \"ISO-8601\"   // optional\n}\n```\n\n**Flow:**\n1. Fetch customer config + products from Airtable\n2. Pick product (rotation or specified)\n3. Claude API → post text + visual prompts\n4. Gemini → Image (Imagen) OR Video (Veo 9:16)\n5. Create Content_Pipeline record\n6. Update Product.Last_Featured_Date\n7. Create Publishing_Slot\n8. Trigger QA agent"
+        "content": "## Viralyn — Generate Post\n\n**Trigger:** Webhook POST /generate-post\n\n**Input:**\n```json\n{\n  \"customer_id\": \"LOS-04899\",\n  \"format\": \"image\" | \"video\",\n  \"source\": \"Rotation\" | \"Campaign\" | \"Telegram\",\n  \"product_name\": null,     // optional (auto-rotate if null)\n  \"campaign_id\": null,      // optional\n  \"brief\": null,            // optional\n  \"slot_time\": \"ISO-8601\"   // optional\n}\n```\n\n**Flow:**\n1. Fetch customer config + products from Airtable\n2. Pick product (rotation or specified)\n3. Claude API → post text + visual prompts\n4. Gemini → Image (Imagen) OR Video (Veo 9:16)\n5. Create Content_Pipeline record\n6. Update Product.Last_Featured_Date\n7. Create Publishing_Slot\n8. Claude QA inline → evaluate + update Content_Pipeline"
       }
     },
 
@@ -393,10 +447,20 @@
     },
     "Update Product Date": {
       "main": [[
-        { "node": "Trigger QA", "type": "main", "index": 0 }
+        { "node": "Claude — QA Eval", "type": "main", "index": 0 }
       ]]
     },
-    "Trigger QA": {
+    "Claude — QA Eval": {
+      "main": [[
+        { "node": "Parse QA Response", "type": "main", "index": 0 }
+      ]]
+    },
+    "Parse QA Response": {
+      "main": [[
+        { "node": "Update QA Result", "type": "main", "index": 0 }
+      ]]
+    },
+    "Update QA Result": {
       "main": [[
         { "node": "Respond Success", "type": "main", "index": 0 }
       ]]

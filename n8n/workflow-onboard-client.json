@@ -33,7 +33,7 @@
           "value": {
             "Customer_ID": "={{ $json.body.customer.Customer_ID }}",
             "Customer_Name": "={{ $json.body.customer.Customer_Name }}",
-            "Customer_Status": "Prospect",
+            "Customer_Status": "={{ $json.body.customer.Customer_Status || 'En review' }}",
             "Customer_Adress": "={{ $json.body.customer.Customer_Adress }}",
             "Customer_Market": "={{ $json.body.customer.Customer_Market }}",
             "Customer_Website": "={{ $json.body.customer.Source_URL }}",
@@ -47,7 +47,8 @@
             "Color_Set": "={{ $json.body.customer.Color_Set }}",
             "Target_Personna": "={{ $json.body.customer.Target_Personna }}",
             "Blotato_Client_ID": "={{ $json.body.customer.Blotato_Client_ID }}",
-            "Telegram_Chat_ID": "={{ $json.body.customer.Telegram_Chat_ID }}"
+            "Telegram_Chat_ID": "={{ $json.body.customer.Telegram_Chat_ID }}",
+            "Logo_URL": "={{ $json.body.customer.Logo_URL }}"
           }
         },
         "options": {}
@@ -144,15 +145,26 @@
     },
     {
       "parameters": {
+        "mode": "chooseBranch",
+        "output": "empty"
+      },
+      "id": "a1000001-0001-0001-0001-000000000008",
+      "name": "Wait All Done",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1200, 304]
+    },
+    {
+      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: true, customer_id: $(\"Webhook Onboard\").item.json.body.customer.Customer_ID, message: \"Customer and products created in unified Customers table\" }) }}",
+        "responseBody": "={{ JSON.stringify({ success: true, customer_id: $(\"Webhook Onboard\").item.json.body.customer.Customer_ID, message: \"Customer and products created in Airtable\" }) }}",
         "options": {}
       },
       "id": "a1000001-0001-0001-0001-000000000007",
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [960, 184]
+      "position": [1440, 304]
     }
   ],
   "connections": {
@@ -167,7 +179,7 @@
     "Create Customer": {
       "main": [
         [
-          { "node": "Respond Success", "type": "main", "index": 0 }
+          { "node": "Wait All Done", "type": "main", "index": 0 }
         ]
       ]
     },
@@ -182,6 +194,20 @@
       "main": [
         [
           { "node": "Create Products", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Products": {
+      "main": [
+        [
+          { "node": "Wait All Done", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Wait All Done": {
+      "main": [
+        [
+          { "node": "Respond Success", "type": "main", "index": 0 }
         ]
       ]
     }
