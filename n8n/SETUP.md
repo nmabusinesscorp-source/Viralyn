@@ -288,7 +288,7 @@ Webhook → Update Content_Pipeline with QA verdict.
 | Endpoint            | Method | Description                                     |
 |---------------------|--------|-------------------------------------------------|
 | `/health`           | GET    | Health check                                    |
-| `/agent/onboard`    | POST   | Claude web_search → extract customer data       |
+| `/agent/onboard`    | POST   | ⚠️ Deprecated — now handled directly in n8n form workflow |
 | `/agent/qa`         | POST   | Claude JSON eval → QA verdict                   |
 | `/agent/generate`   | POST   | Proxy → triggers n8n generate-post webhook      |
 
@@ -340,8 +340,14 @@ curl -X POST http://localhost:3000/agent/generate \
 │  └────────────────────────────────────────┘                         │
 │                                                                      │
 │  ┌────────────────────────────────────────┐                         │
+│  │   n8n: Formulaire Onboarding Client   │ (form trigger)          │
+│  │   ├─ Form → Claude API (web_search)    │                         │
+│  │   ├─ Parse JSON → Create Customer      │                         │
+│  │   └─ Split Products → Create Products  │                         │
+│  └────────────────────────────────────────┘                         │
+│                                                                      │
+│  ┌────────────────────────────────────────┐                         │
 │  │   Express: Agent Server (:3000)        │                         │
-│  │   ├─ POST /agent/onboard (Claude)      │                         │
 │  │   ├─ POST /agent/qa (Claude)           │                         │
 │  │   └─ POST /agent/generate (→ n8n)      │                         │
 │  └────────────────────────────────────────┘                         │
