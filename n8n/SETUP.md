@@ -256,8 +256,33 @@ POST /webhook/generate-post
     Respond Success
 ```
 
-### Workflow: Onboard Client (`workflow-onboard-client.json`)
-Webhook → Create customer + products in Airtable.
+### Workflow: Onboard Client — Form (`workflow-onboard-form.json`)
+Point d'entrée utilisateur pour l'onboarding. Appelle l'agent Express déployé.
+
+```
+Formulaire n8n (URL + Nom optionnel)
+    │
+    ▼
+HTTP Request → POST /agent/onboard (Express :3000)
+    │
+    ▼
+Agent Express (agents/onboarder.js) :
+    ├─ Claude API (web_search) → analyse du site
+    ├─ Extraction JSON (profil client + produits)
+    ├─ Validation des données obligatoires
+    ├─ Notification Slack
+    └─ sendOnboardingData() → webhook n8n onboard-client
+         │
+         ▼
+    Workflow CRUD (ci-dessous) → Airtable
+    │
+    ▼
+Affichage résultat (succès / erreur)
+```
+
+### Workflow: Onboard Client — CRUD (`workflow-onboard-client.json`)
+Webhook interne → Create customer + products in Airtable.
+Appelé automatiquement par l'agent Express via `sendOnboardingData()`.
 
 ### Workflow: QA Result (`workflow-qa-result.json`)
 Webhook → Update Content_Pipeline with QA verdict.
@@ -285,7 +310,7 @@ Webhook → Update Content_Pipeline with QA verdict.
 |---------------------------|----------------------------------------|
 | `appGeibRFjtIvEGll`       | Tous les noeuds Airtable (Base ID)     |
 | `YOUR_ANTHROPIC_API_KEY`  | Claude — Generate Text (header x-api-key) |
-| `http://localhost:3000`   | Trigger QA (URL du serveur Express)    |
+| `http://localhost:3000`   | Onboard Form + Trigger QA (URL serveur Express) |
 | `https://n8n.srv1000420.hstgr.cloud/webhook/generate-post` | Content Scheduler → Call Generate Post |
 
 ---
@@ -295,7 +320,7 @@ Webhook → Update Content_Pipeline with QA verdict.
 | Endpoint            | Method | Description                                     |
 |---------------------|--------|-------------------------------------------------|
 | `/health`           | GET    | Health check                                    |
-| `/agent/onboard`    | POST   | ⚠️ Deprecated — now handled directly in n8n form workflow |
+| `/agent/onboard`    | POST   | Agent onboarding — appelé par le formulaire n8n           |
 | `/agent/qa`         | POST   | Claude JSON eval → QA verdict                   |
 | `/agent/generate`   | POST   | Proxy → triggers n8n generate-post webhook      |
 
@@ -348,15 +373,24 @@ curl -X POST http://localhost:3000/agent/generate \
 │                                                                      │
 │  ┌────────────────────────────────────────┐                         │
 │  │   n8n: Formulaire Onboarding Client   │ (form trigger)          │
-│  │   ├─ Form → Claude API (web_search)    │                         │
-│  │   ├─ Parse JSON → Create Customer      │                         │
-│  │   └─ Split Products → Create Products  │                         │
+│  │   └─ Form (URL + Nom)                 │                         │
+│  │       └─ POST /agent/onboard ──────┐  │                         │
+│  └────────────────────────────────────│──┘                         │
+│                                       ▼                             │
+│  ┌────────────────────────────────────────┐                         │
+│  │   Express: Agent Server (:3000)        │                         │
+│  │   ├─ POST /agent/onboard (Claude)     │ ← Agent Onboarder       │
+│  │   │   ├─ Claude API (web_search)       │                         │
+│  │   │   ├─ Validation + Slack            │                         │
+│  │   │   └─ → n8n webhook onboard-client  │                         │
+│  │   ├─ POST /agent/qa (Claude)           │ ← Agent QA Controller  │
+│  │   └─ POST /agent/generate (→ n8n)      │                         │
 │  └────────────────────────────────────────┘                         │
 │                                                                      │
 │  ┌────────────────────────────────────────┐                         │
-│  │   Express: Agent Server (:3000)        │                         │
-│  │   ├─ POST /agent/qa (Claude)           │                         │
-│  │   └─ POST /agent/generate (→ n8n)      │                         │
+│  │   n8n: Onboard Client CRUD            │ (webhook interne)       │
+│  │   ├─ Create Customer (Airtable)        │                         │
+│  │   └─ Split + Create Products (Airtable)│                         │
 │  └────────────────────────────────────────┘                         │
 │                                                                      │
 │  AIRTABLE (appGeibRFjtIvEGll)                                       │

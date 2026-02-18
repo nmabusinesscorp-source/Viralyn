@@ -1,0 +1,154 @@
+{
+  "name": "Viralyn — Onboard Client (Form)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Viralyn — Nouvel Onboarding Client",
+        "formDescription": "Renseigner l'URL du site web du client. L'agent Claude analysera le site et créera automatiquement le profil client + catalogue produits dans Airtable.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "URL du site web",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "https://example.com"
+            },
+            {
+              "fieldLabel": "Nom du client (optionnel)",
+              "fieldType": "text",
+              "requiredField": false,
+              "placeholder": "Ex: Le Resto Genève"
+            }
+          ]
+        },
+        "options": {
+          "respondWithData": true
+        }
+      },
+      "id": "form-trigger",
+      "name": "Formulaire Onboarding",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [240, 400],
+      "webhookId": "onboard-form"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/agent/onboard",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": {{ JSON.stringify($json[\"URL du site web\"]) }},\n  \"name\": {{ JSON.stringify($json[\"Nom du client (optionnel)\"] || \"\") }}\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "http-call-agent",
+      "name": "Call Onboard Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "leftValue": "", "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ]
+        }
+      },
+      "id": "if-success",
+      "name": "Agent Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [780, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "message",
+              "value": "=✅ Client onboardé avec succès !\n\nClient : {{ $json.customer.Customer_Name }} ({{ $json.customer.Customer_ID }})\nSecteur : {{ $json.customer.Customer_Market }}\nProduits extraits : {{ $json.productsCount }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-success-msg",
+      "name": "Format Success",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r2",
+              "name": "message",
+              "value": "=❌ Erreur lors de l'onboarding.\n\nDétails : {{ $json.error || $json.details || 'Erreur inconnue' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-error-msg",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1040, 500]
+    },
+    {
+      "parameters": {},
+      "id": "note-form",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [160, 160],
+      "parameters_extra": {
+        "content": "## Viralyn — Onboard Client (Form)\n\n**Point d'entrée** : Formulaire n8n (URL + Nom optionnel)\n\n**Flow :**\n1. Formulaire → collecte URL + nom\n2. HTTP Request → POST /agent/onboard (Express)\n3. L'agent Express utilise Claude (web_search) pour :\n   - Analyser le site web\n   - Extraire profil client + catalogue produits\n   - Valider les données\n   - Notifier Slack\n   - Envoyer au webhook onboard-client (CRUD Airtable)\n4. Affiche le résultat (succès / erreur)\n\n**Important :** Ce workflow utilise l'agent Express déployé.\nL'agent appelle ensuite le workflow `Onboard Client` (webhook)\npour la création des records Airtable."
+      }
+    }
+  ],
+  "connections": {
+    "Formulaire Onboarding": {
+      "main": [
+        [
+          { "node": "Call Onboard Agent", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Call Onboard Agent": {
+      "main": [
+        [
+          { "node": "Agent Success?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Agent Success?": {
+      "main": [
+        [{ "node": "Format Success", "type": "main", "index": 0 }],
+        [{ "node": "Format Error", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "viralyn" },
+    { "name": "onboarding" }
+  ]
+}
