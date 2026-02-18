@@ -43,10 +43,17 @@ def load_workflow(filename):
     with open(filepath, "r") as f:
         wf = json.load(f)
 
-    # Fix Airtable credentials in all nodes
+    # Remove read-only fields rejected by the API
+    wf.pop("tags", None)
+
+    # Fix nodes
     for node in wf.get("nodes", []):
+        # Fix Airtable credentials
         if node.get("type", "").startswith("n8n-nodes-base.airtable"):
             node["credentials"] = {"airtableTokenApi": AIRTABLE_CRED}
+        # Sticky notes: merge parameters_extra into parameters
+        if "parameters_extra" in node:
+            node["parameters"].update(node.pop("parameters_extra"))
 
     return wf
 
