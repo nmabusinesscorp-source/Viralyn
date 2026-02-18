@@ -17,6 +17,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { onboard } = require("./agents/onboarder");
 const { evaluatePost } = require("./agents/qa-controller");
+const { triggerGeneratePost } = require("./lib/n8n");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -85,6 +86,24 @@ app.post("/agent/qa", async (req, res) => {
   }
 });
 
+// ─── Generate Post (triggers n8n workflow) ───────────────────────
+app.post("/agent/generate", async (req, res) => {
+  const { customer_id, format, source, campaign_id, product_name, brief, slot_time } = req.body;
+
+  if (!customer_id) {
+    return res.status(400).json({ error: "Missing required field: customer_id" });
+  }
+
+  try {
+    console.log(`[Server] POST /agent/generate — customer=${customer_id}, format=${format || "image"}, source=${source || "Rotation"}`);
+    const result = await triggerGeneratePost({ customer_id, format, source, campaign_id, product_name, brief, slot_time });
+    res.json(result);
+  } catch (err) {
+    console.error(`[Server] Generate error: ${err.message}`);
+    res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+  }
+});
+
 // ─── Start server ────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`[Viralyn] Agent server running on port ${PORT}`);
@@ -92,4 +111,5 @@ app.listen(PORT, () => {
   console.log(`  GET  /health`);
   console.log(`  POST /agent/onboard`);
   console.log(`  POST /agent/qa`);
+  console.log(`  POST /agent/generate`);
 });

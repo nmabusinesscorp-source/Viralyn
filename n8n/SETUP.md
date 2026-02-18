@@ -170,114 +170,188 @@ Pipeline de contenu — du brouillon à la publication.
 
 ---
 
-## 2. Content Generation Flow
+## 2. n8n Workflows
+
+### Workflow: Content Scheduler (`workflow-content-scheduler.json`)
+Cron quotidien → planifie la génération de contenu pour chaque client actif.
 
 ```
-2 SOURCES DE CONTENU :
-
-1. ROTATION AUTOMATIQUE (cron via n8n)
-   ┌─────────────┐
-   │  Schedule    │ (quotidien)
-   └──────┬──────┘
-          ▼
-   Clients actifs (Airtable)
-          │
-          ▼
-   Pour chaque client :
-   ├─ Récupérer produits actifs
-   ├─ Trier par Last_Featured_Date ASC (null first)
-   ├─ Sélectionner le produit suivant
-   ├─ Claude API → texte post + prompt visuel
-   ├─ Génération image (via prompt visuel)
-   ├─ Créer dans Content_Pipeline (Source: "Rotation")
-   ├─ Mettre à jour Last_Featured_Date du produit
-   └─ Appeler /agent/qa → QA automatique
-
-2. DEMANDE CLIENT (Telegram bot)
-   ┌─────────────────────────────────────┐
-   │ Client Telegram : "Promo burgers    │
-   │ -20% aujourd'hui !"                 │
-   └──────┬──────────────────────────────┘
-          ▼
-   Bot parse avec Claude :
-   ├─ Identifie le client (Telegram_Chat_ID)
-   ├─ Extrait : produit, durée, brief
-   ├─ Calcule Posts_Needed selon durée
-   │   (1 jour → 1 post, 1 semaine → 3-5 posts)
-   ├─ Crée Campaign (Source: "Telegram", Priority: "Haute")
-   └─ Déclenche la génération immédiatement
-          │
-          ▼
-   Content_Pipeline (Source: "Telegram")
-          │
-          ▼
-   QA → Notification client Telegram
+Daily 06:00 (Europe/Zurich)
+    │
+    ├─ Get Active Clients (Airtable)
+    ├─ Get All Slot Settings (Airtable)
+    └─ Get Active Campaigns (Airtable)
+         │
+         ▼
+    Code: Plan Generation Tasks
+    ├─ Match clients ↔ today's slots (Day_of_Week)
+    ├─ Alternate formats: image/image/video pattern
+    ├─ Check campaign priority (Posts_Generated < Posts_Needed)
+    └─ Output: array of generation tasks
+         │
+         ▼
+    SplitInBatches → Call Generate Post → Wait 10s → Loop
 ```
+
+**Format alternation:**
+- ≤2 slots/jour: dernier = video
+- 3+ slots/jour: chaque 3ème = video
+- Ex: 5 slots → image, image, **video**, image, **video**
+
+### Workflow: Generate Post (`workflow-generate-post.json`)
+Sub-workflow appelable par Scheduler, Telegram bot, ou API manuelle.
+
+```
+POST /webhook/generate-post
+{
+  "customer_id": "LOS-04899",
+  "format": "image" | "video",
+  "source": "Rotation" | "Campaign" | "Telegram",
+  "product_name": "",    // auto-rotate if empty
+  "campaign_id": "",     // optional
+  "brief": "",           // optional
+  "slot_time": ""        // ISO-8601 optional
+}
+    │
+    ├─ Airtable: Get Customer config
+    └─ Airtable: Get Products (sorted by Last_Featured_Date ASC)
+         │
+         ▼
+    Code: Pick Product & Build Prompts
+    ├─ Rotation: product with oldest Last_Featured_Date
+    ├─ Or explicit product (campaign/telegram)
+    └─ Build Claude prompt with customer persona
+         │
+         ▼
+    HTTP Request: Claude API → JSON {post_text, prompt_visual, prompt_video}
+         │
+         ▼
+    Parse Claude Response
+         │
+         ▼
+    Switch: Image or Video?
+    ├─ Image → Gemini Imagen 3.0 (generate image)
+    └─ Video → Gemini Veo 2.0 (generate video 9:16, 8s)
+         │
+         ▼
+    Merge Media
+         │
+         ▼
+    Create Content_Pipeline record (Airtable)
+         │
+    ├─ Update Product.Last_Featured_Date
+    └─ Create Publishing_Slot
+         │
+         ▼
+    Trigger QA (/agent/qa)
+         │
+         ▼
+    Respond Success
+```
+
+### Workflow: Onboard Client (`workflow-onboard-client.json`)
+Webhook → Create customer + products in Airtable.
+
+### Workflow: QA Result (`workflow-qa-result.json`)
+Webhook → Update Content_Pipeline with QA verdict.
 
 ---
 
 ## 3. n8n Credentials
 
-### Airtable
-1. Go to n8n → **Credentials** → **Add Credential**
-2. Select **Airtable Personal Access Token**
-3. Scopes needed: `data.records:read`, `data.records:write`
-4. Access to base `appGeibRFjtIvEGll`
+### Required credentials in n8n:
+
+| Credential            | Type                         | Used by                    |
+|-----------------------|------------------------------|----------------------------|
+| Airtable              | Personal Access Token        | All Airtable nodes         |
+| Google Gemini         | Google PaLM API Key          | Image + Video generation   |
+| *(optional)* Blotato  | Blotato API Key              | Auto-publish to social     |
 
 ### Environment Variables (n8n)
 ```
 AIRTABLE_BASE_ID=appGeibRFjtIvEGll
+ANTHROPIC_API_KEY=sk-ant-...
+VIRALYN_SERVER_URL=http://localhost:3000
+N8N_WEBHOOK_BASE_URL=https://n8n.srv1000420.hstgr.cloud/webhook
 ```
 
 ---
 
-## 4. Webhook Paths
+## 4. Express Server Endpoints
 
-| Workflow            | Path                          | Method |
-|---------------------|-------------------------------|--------|
-| Onboard Client      | `/webhook/onboard-client`     | POST   |
-| QA Result           | `/webhook/qa-result`          | POST   |
-| Generate Post       | `/webhook/generate-post`      | POST   |
-| Telegram Bot        | `/webhook/telegram-bot`       | POST   |
+| Endpoint            | Method | Description                                     |
+|---------------------|--------|-------------------------------------------------|
+| `/health`           | GET    | Health check                                    |
+| `/agent/onboard`    | POST   | Claude web_search → extract customer data       |
+| `/agent/qa`         | POST   | Claude JSON eval → QA verdict                   |
+| `/agent/generate`   | POST   | Proxy → triggers n8n generate-post webhook      |
+
+### Generate endpoint (for Telegram bot / manual trigger):
+```bash
+curl -X POST http://localhost:3000/agent/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "LOS-04899",
+    "format": "video",
+    "source": "Telegram",
+    "brief": "Promo -20% sur tous les tacos ce weekend"
+  }'
+```
 
 ---
 
 ## 5. Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                    VIRALYN SYSTEM v2.0                            │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  TRIGGERS                                                        │
-│  ├─ Cron (n8n Schedule) ──────────────────────┐                 │
-│  └─ Telegram Bot ─────────────┐               │                 │
-│                                │               │                 │
-│  n8n WORKFLOWS                 ▼               ▼                 │
-│  ├─ Generate Post ◄───── Campaign Check + Product Rotation      │
-│  │   ├─ Claude API → texte + prompt_visual                      │
-│  │   ├─ Image Gen → Generated_Visual                            │
-│  │   └─ → Content_Pipeline (Brouillon)                          │
-│  │                                                               │
-│  ├─ Onboard Client → Customers + Products                       │
-│  └─ QA Result → Content_Pipeline update                         │
-│                                                                  │
-│  EXPRESS AGENTS                                                  │
-│  ├─ /agent/onboard → Claude (web_search) → n8n                  │
-│  └─ /agent/qa → Claude (JSON eval) → n8n                        │
-│                                                                  │
-│  AIRTABLE                                                        │
-│  ├─ Customers (profil unifié)                                    │
-│  ├─ Products (catalogue + rotation)                              │
-│  ├─ Content_Pipeline (posts + visuels + QA)                      │
-│  ├─ Customer_Campaigns (campagnes planifiées + Telegram)         │
-│  ├─ Publishing_Slot (créneaux)                                   │
-│  ├─ Slot_Settings (planning récurrent)                           │
-│  ├─ System_Prompts (prompts versionnés)                          │
-│  └─ Commercial_Packages (offres)                                 │
-│                                                                  │
-│  NOTIFICATIONS                                                   │
-│  ├─ Slack (équipe interne)                                       │
-│  └─ Telegram (client — confirmation post)                        │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                     VIRALYN SYSTEM v2.0                               │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  TRIGGERS                                                            │
+│  ├─ Cron (n8n Schedule 06:00)                                       │
+│  ├─ POST /agent/generate (Express)                                  │
+│  └─ Telegram Bot (future)                                           │
+│       │         │              │                                     │
+│       ▼         ▼              ▼                                     │
+│  ┌────────────────────────────────────────┐                         │
+│  │   n8n: Content Scheduler               │ (cron only)             │
+│  │   ├─ Fetch clients + slots + campaigns │                         │
+│  │   ├─ Plan tasks for today              │                         │
+│  │   └─ Call Generate Post × N            │                         │
+│  └────────────────┬───────────────────────┘                         │
+│                   ▼                                                  │
+│  ┌────────────────────────────────────────┐                         │
+│  │   n8n: Generate Post                   │ (webhook)               │
+│  │   ├─ Get Customer + Products           │                         │
+│  │   ├─ Product Rotation (or explicit)    │                         │
+│  │   ├─ Claude API → texte + prompts      │                         │
+│  │   ├─ Gemini Imagen → photo (1024px)    │ ← IMAGE branch         │
+│  │   ├─ Gemini Veo → vidéo (9:16, 8s)    │ ← VIDEO branch         │
+│  │   ├─ → Content_Pipeline (Draft)        │                         │
+│  │   ├─ → Product.Last_Featured_Date      │                         │
+│  │   ├─ → Publishing_Slot (Reserved)      │                         │
+│  │   └─ → /agent/qa (QA check)           │                         │
+│  └────────────────────────────────────────┘                         │
+│                                                                      │
+│  ┌────────────────────────────────────────┐                         │
+│  │   Express: Agent Server (:3000)        │                         │
+│  │   ├─ POST /agent/onboard (Claude)      │                         │
+│  │   ├─ POST /agent/qa (Claude)           │                         │
+│  │   └─ POST /agent/generate (→ n8n)      │                         │
+│  └────────────────────────────────────────┘                         │
+│                                                                      │
+│  AIRTABLE (appGeibRFjtIvEGll)                                       │
+│  ├─ Customers ──── profil unifié + config créative                  │
+│  ├─ Products ───── catalogue + Last_Featured_Date (rotation)        │
+│  ├─ Content_Pipeline ── posts + visuels + QA + Source               │
+│  ├─ Customer_Campaigns ─ campagnes + Posts_Needed/Generated         │
+│  ├─ Publishing_Slot ─── créneaux de publication                     │
+│  ├─ Slot_Settings ───── planning récurrent (jour + heure)           │
+│  ├─ System_Prompts ──── prompts versionnés par client               │
+│  └─ Commercial_Packages ── offres et pricing                        │
+│                                                                      │
+│  NOTIFICATIONS                                                       │
+│  ├─ Slack (équipe interne)                                          │
+│  └─ Telegram (client — confirmation post, future)                   │
+└──────────────────────────────────────────────────────────────────────┘
 ```

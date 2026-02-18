@@ -1,0 +1,404 @@
+{
+  "name": "Viralyn — Generate Post",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-post",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-generate",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 400],
+      "webhookId": "generate-post"
+    },
+
+    {
+      "parameters": {
+        "operation": "search",
+        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "table": { "__rl": true, "mode": "id", "value": "Customers" },
+        "filterByFormula": "={Customer_ID} = '{{ $json.body.customer_id }}'",
+        "options": { "limit": 1 }
+      },
+      "id": "at-get-customer",
+      "name": "Get Customer",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [240, 400],
+      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+    },
+
+    {
+      "parameters": {
+        "operation": "search",
+        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "table": { "__rl": true, "mode": "id", "value": "Products" },
+        "filterByFormula": "=AND({Customer_ID} = '{{ $('Webhook').item.json.body.customer_id }}', {Is_Active} = TRUE())",
+        "sort": [{ "field": "Last_Featured_Date", "direction": "asc" }],
+        "options": {}
+      },
+      "id": "at-get-products",
+      "name": "Get Products",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [240, 640],
+      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// ─── Pick Product & Build Prompts ───────────────────────────\n// Inputs: customer data, products list, webhook body\n\nconst webhook = $('Webhook').first().json.body;\nconst customer = $('Get Customer').first().json;\nconst products = $('Get Products').all().map(i => i.json);\n\n// --- Determine product ---\nlet product;\nif (webhook.product_name) {\n  // Explicit product requested (campaign/telegram)\n  product = products.find(p => p.Product_Name === webhook.product_name) || products[0];\n} else {\n  // Rotation: pick the one with oldest Last_Featured_Date (null = never featured = first)\n  product = products[0]; // Already sorted ASC by Last_Featured_Date\n}\n\nif (!product) {\n  throw new Error(`No active products for customer ${webhook.customer_id}`);\n}\n\n// --- Get customer prompts (from lookups) ---\nconst promptText = Array.isArray(customer.Prompt_Text) ? customer.Prompt_Text[0] : (customer.Prompt_Text || '');\nconst promptVisual = Array.isArray(customer.Prompt_Visual) ? customer.Prompt_Visual[0] : (customer.Prompt_Visual || '');\nconst promptVideo = Array.isArray(customer.Prompt_Visual_to_Video) ? customer.Prompt_Visual_to_Video[0] : (customer.Prompt_Visual_to_Video || '');\n\n// --- Determine format ---\nconst format = webhook.format || 'image'; // 'image' or 'video'\n\n// --- Build Claude prompt for text generation ---\nconst brief = webhook.brief || '';\nconst campaignContext = brief ? `\\n\\nBrief spécifique : ${brief}` : '';\n\nconst claudeSystemPrompt = promptText || `Tu es un Social Media Manager expert. Crée un post engageant pour ${customer.Customer_Name}.`;\n\nconst claudeUserPrompt = `Crée un post pour le produit suivant :\n\nProduit : ${product.Product_Name}\nDescription : ${product.Description || 'N/A'}\nPrix : ${product.Price || 'N/A'}\n\nClient : ${customer.Customer_Name}\nSecteur : ${customer.Customer_Market || 'N/A'}\nCible : ${customer.Target_Personna || 'N/A'}\nCTA : ${customer.CTA || 'N/A'}\nTon : ${customer.Mood || 'N/A'}${campaignContext}\n\nFormat : ${format === 'video' ? 'Reel/Story/TikTok (court, punchy, 15s max de lecture)' : 'Post Instagram (engageant, avec hashtags)'}\n\nRéponds UNIQUEMENT en JSON :\n{\n  \"post_text\": \"le texte du post complet avec emojis et hashtags\",\n  \"prompt_visual\": \"prompt EN ANGLAIS pour générer l'image food photography, style: ${customer.Visual_type || 'photo réaliste'}, couleurs: ${customer.Color_Set || 'warm tones'}\",\n  \"prompt_video\": \"prompt EN ANGLAIS pour générer une vidéo 8s de type story/reel, style: ${customer.Visual_to_Video_type || customer.Visual_type || 'dynamic food video'}\"\n}`;\n\nreturn [{\n  json: {\n    // Pass through for later nodes\n    customer_id: webhook.customer_id,\n    customer_name: customer.Customer_Name,\n    customer_record_id: customer.id,\n    product_name: product.Product_Name,\n    product_record_id: product.id,\n    format: format,\n    source: webhook.source || 'Rotation',\n    campaign_id: webhook.campaign_id || '',\n    slot_time: webhook.slot_time || '',\n    blotato_client_id: customer.Blotato_Client_ID || '',\n    // Claude prompts\n    claude_system: claudeSystemPrompt,\n    claude_user: claudeUserPrompt,\n    // Visual prompts (fallback if Claude fails)\n    fallback_prompt_visual: promptVisual,\n    fallback_prompt_video: promptVideo\n  }\n}];"
+      },
+      "id": "code-pick-product",
+      "name": "Pick Product & Build Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5-20250929\",\n  \"max_tokens\": 1500,\n  \"system\": {{ JSON.stringify($json.claude_system) }},\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.claude_user) }}\n    }\n  ]\n}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "http-claude",
+      "name": "Claude — Generate Text",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 400]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// ─── Parse Claude Response ──────────────────────────────────\nconst prev = $('Pick Product & Build Prompts').first().json;\nconst claudeResponse = $input.first().json;\n\n// Extract text from Claude response\nconst responseText = claudeResponse.content?.[0]?.text || '';\n\n// Parse JSON from response\nlet parsed;\ntry {\n  const jsonMatch = responseText.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  // Fallback: use the raw text as post and customer prompts for visual\n  parsed = {\n    post_text: responseText.substring(0, 500),\n    prompt_visual: prev.fallback_prompt_visual,\n    prompt_video: prev.fallback_prompt_video\n  };\n}\n\nreturn [{\n  json: {\n    ...prev,\n    post_text: parsed.post_text || '',\n    prompt_visual: parsed.prompt_visual || prev.fallback_prompt_visual,\n    prompt_video: parsed.prompt_video || prev.fallback_prompt_video,\n    format: prev.format\n  }\n}];"
+      },
+      "id": "code-parse-claude",
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 400]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "leftValue": "", "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "format-check",
+              "leftValue": "={{ $json.format }}",
+              "rightValue": "video",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "if-format",
+      "name": "Image or Video?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 400]
+    },
+
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "generate",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/imagen-3.0-generate-002"
+        },
+        "prompt": "={{ $json.prompt_visual }}",
+        "options": {
+          "binaryPropertyOutput": "generated_media"
+        }
+      },
+      "id": "gemini-image",
+      "name": "Gemini — Generate Image",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [1560, 280],
+      "credentials": { "googlePalmApi": { "id": "REPLACE", "name": "Google Gemini" } }
+    },
+
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "generate",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/veo-2.0-generate-001"
+        },
+        "prompt": "={{ $json.prompt_video }}",
+        "returnAs": "url",
+        "options": {
+          "aspectRatio": "9:16",
+          "durationSeconds": 8,
+          "personGeneration": "allow_adult",
+          "binaryPropertyOutput": "generated_media"
+        }
+      },
+      "id": "gemini-video",
+      "name": "Gemini — Generate Video",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [1560, 520],
+      "credentials": { "googlePalmApi": { "id": "REPLACE", "name": "Google Gemini" } }
+    },
+
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "empty"
+      },
+      "id": "merge-media",
+      "name": "Merge Media",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1820, 400]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// ─── Build Content_Pipeline Record ──────────────────────────\nconst data = $('Parse Claude Response').first().json;\nconst mediaItem = $input.first();\n\n// Check if we have a video URL or binary image\nconst hasVideoUrl = data.format === 'video' && mediaItem.json?.url;\nconst hasBinaryMedia = !!mediaItem.binary?.generated_media;\n\nconst now = new Date().toISOString();\n\nreturn [{\n  json: {\n    // Content_Pipeline fields\n    Customer_Name: data.customer_name,\n    Customer_ID: data.customer_id,\n    Status: 'Draft',\n    Platform: data.format === 'video' ? 'TikTok' : 'Instagram',\n    Post: data.post_text,\n    Prompt_Visual: data.prompt_visual,\n    Prompt_Video: data.prompt_video,\n    Product_Name: data.product_name,\n    Campaign_ID: data.campaign_id,\n    Source: data.source,\n    Video_Status: data.format === 'video' ? 'Ready' : '',\n    PublishAt: data.slot_time || '',\n    // Media URL (for video) or will use binary upload\n    URL_Visual: hasVideoUrl ? mediaItem.json.url : '',\n    // Pass-through for subsequent nodes\n    _product_record_id: data.product_record_id,\n    _customer_record_id: data.customer_record_id,\n    _format: data.format,\n    _blotato_client_id: data.blotato_client_id,\n    _has_binary: hasBinaryMedia\n  },\n  // Preserve binary data if present\n  binary: mediaItem.binary || {}\n}];"
+      },
+      "id": "code-build-record",
+      "name": "Build Pipeline Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2080, 400]
+    },
+
+    {
+      "parameters": {
+        "operation": "create",
+        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "table": { "__rl": true, "mode": "id", "value": "Content_Pipeline" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Customer_Name": "={{ $json.Customer_Name }}",
+            "Customer_ID": "={{ $json.Customer_ID }}",
+            "Status": "={{ $json.Status }}",
+            "Platform": "={{ $json.Platform }}",
+            "Post": "={{ $json.Post }}",
+            "Prompt_Visual": "={{ $json.Prompt_Visual }}",
+            "Prompt_Video": "={{ $json.Prompt_Video }}",
+            "Product_Name": "={{ $json.Product_Name }}",
+            "Campaign_ID": "={{ $json.Campaign_ID }}",
+            "Source": "={{ $json.Source }}",
+            "Video_Status": "={{ $json.Video_Status }}",
+            "PublishAt": "={{ $json.PublishAt }}",
+            "URL_Visual": "={{ $json.URL_Visual }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "at-create-pipeline",
+      "name": "Create Content_Pipeline",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [2340, 400],
+      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+    },
+
+    {
+      "parameters": {
+        "operation": "update",
+        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "table": { "__rl": true, "mode": "id", "value": "Products" },
+        "id": "={{ $('Build Pipeline Record').first().json._product_record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Last_Featured_Date": "={{ new Date().toISOString().split('T')[0] }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "at-update-product",
+      "name": "Update Product Date",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [2600, 280],
+      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+    },
+
+    {
+      "parameters": {
+        "operation": "create",
+        "base": { "__rl": true, "mode": "id", "value": "={{ $env.AIRTABLE_BASE_ID }}" },
+        "table": { "__rl": true, "mode": "id", "value": "Publishing_Slot" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "SlotDateTime": "={{ $('Build Pipeline Record').first().json.PublishAt }}",
+            "Status": "Reserved",
+            "Customer_ID_Text": "={{ $('Build Pipeline Record').first().json.Customer_ID }}",
+            "Post_ID": "={{ $('Create Content_Pipeline').first().json.id }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "at-create-slot",
+      "name": "Create Publishing Slot",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [2600, 520],
+      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.VIRALYN_SERVER_URL || 'http://localhost:3000' }}/agent/qa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"post_id\": \"{{ $('Create Content_Pipeline').first().json.id }}\",\n  \"post_text\": {{ JSON.stringify($('Build Pipeline Record').first().json.Post) }},\n  \"prompt_visual\": {{ JSON.stringify($('Build Pipeline Record').first().json.Prompt_Visual) }},\n  \"product_name\": {{ JSON.stringify($('Build Pipeline Record').first().json.Product_Name) }},\n  \"customer\": {\n    \"Customer_Name\": {{ JSON.stringify($('Build Pipeline Record').first().json.Customer_Name) }},\n    \"Customer_ID\": {{ JSON.stringify($('Build Pipeline Record').first().json.Customer_ID) }}\n  }\n}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "http-qa",
+      "name": "Trigger QA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 400]
+    },
+
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  pipeline_record_id: $('Create Content_Pipeline').first().json.id,\n  customer_id: $('Build Pipeline Record').first().json.Customer_ID,\n  product_name: $('Build Pipeline Record').first().json.Product_Name,\n  format: $('Build Pipeline Record').first().json._format,\n  source: $('Build Pipeline Record').first().json.Source,\n  qa_result: $json\n}) }}"
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3120, 400]
+    },
+
+    {
+      "parameters": {},
+      "id": "note-overview",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-60, 120],
+      "parameters_extra": {
+        "content": "## Viralyn — Generate Post\n\n**Trigger:** Webhook POST /generate-post\n\n**Input:**\n```json\n{\n  \"customer_id\": \"LOS-04899\",\n  \"format\": \"image\" | \"video\",\n  \"source\": \"Rotation\" | \"Campaign\" | \"Telegram\",\n  \"product_name\": null,     // optional (auto-rotate if null)\n  \"campaign_id\": null,      // optional\n  \"brief\": null,            // optional\n  \"slot_time\": \"ISO-8601\"   // optional\n}\n```\n\n**Flow:**\n1. Fetch customer config + products from Airtable\n2. Pick product (rotation or specified)\n3. Claude API → post text + visual prompts\n4. Gemini → Image (Imagen) OR Video (Veo 9:16)\n5. Create Content_Pipeline record\n6. Update Product.Last_Featured_Date\n7. Create Publishing_Slot\n8. Trigger QA agent"
+      }
+    },
+
+    {
+      "parameters": {},
+      "id": "note-gemini",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1480, 120],
+      "parameters_extra": {
+        "content": "## Media Generation\n\n**Image:** Imagen 3.0 → photo-realistic food/product shots\n**Video:** Veo 2.0 → 8s vertical (9:16) for Stories/Reels/TikTok\n\nRemplacer les model IDs si nécessaire.\nCredentials: Google Gemini (Google PaLM API key)"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[
+        { "node": "Get Customer", "type": "main", "index": 0 },
+        { "node": "Get Products", "type": "main", "index": 0 }
+      ]]
+    },
+    "Get Customer": {
+      "main": [[
+        { "node": "Pick Product & Build Prompts", "type": "main", "index": 0 }
+      ]]
+    },
+    "Get Products": {
+      "main": [[
+        { "node": "Pick Product & Build Prompts", "type": "main", "index": 1 }
+      ]]
+    },
+    "Pick Product & Build Prompts": {
+      "main": [[
+        { "node": "Claude — Generate Text", "type": "main", "index": 0 }
+      ]]
+    },
+    "Claude — Generate Text": {
+      "main": [[
+        { "node": "Parse Claude Response", "type": "main", "index": 0 }
+      ]]
+    },
+    "Parse Claude Response": {
+      "main": [[
+        { "node": "Image or Video?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Image or Video?": {
+      "main": [
+        [{ "node": "Gemini — Generate Video", "type": "main", "index": 0 }],
+        [{ "node": "Gemini — Generate Image", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gemini — Generate Image": {
+      "main": [[
+        { "node": "Merge Media", "type": "main", "index": 0 }
+      ]]
+    },
+    "Gemini — Generate Video": {
+      "main": [[
+        { "node": "Merge Media", "type": "main", "index": 1 }
+      ]]
+    },
+    "Merge Media": {
+      "main": [[
+        { "node": "Build Pipeline Record", "type": "main", "index": 0 }
+      ]]
+    },
+    "Build Pipeline Record": {
+      "main": [[
+        { "node": "Create Content_Pipeline", "type": "main", "index": 0 }
+      ]]
+    },
+    "Create Content_Pipeline": {
+      "main": [[
+        { "node": "Update Product Date", "type": "main", "index": 0 },
+        { "node": "Create Publishing Slot", "type": "main", "index": 0 }
+      ]]
+    },
+    "Update Product Date": {
+      "main": [[
+        { "node": "Trigger QA", "type": "main", "index": 0 }
+      ]]
+    },
+    "Trigger QA": {
+      "main": [[
+        { "node": "Respond Success", "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "viralyn" },
+    { "name": "generation" }
+  ]
+}
