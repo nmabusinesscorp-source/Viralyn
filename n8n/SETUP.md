@@ -67,6 +67,12 @@ Table client unifiée — profil, config créative, contacts, liens campagnes/pa
 | Customer_Name      | Single line text| Nom commercial du client                     |
 | **Last_Featured_Date** | **Date**    | **Dernière mise en avant — rotation produit** |
 
+> **Note :** `Customer_Name` est écrit en texte brut par le workflow d'onboarding.
+> Pour les produits existants qui n'ont pas de `Customer_Name`, faire un backfill
+> manuel dans Airtable (filtrer `Customer_Name` vide, remplir via `Customer_ID`).
+> À terme, remplacer `Customer_ID` par un **Linked Record → Customers** et ajouter
+> un champ **Lookup** `Customer_Name` pour une synchronisation automatique.
+
 ### Table: `Content_Pipeline` (tbl6OlJbVl9XV8Tw3)
 
 Pipeline de contenu — du brouillon à la publication.
