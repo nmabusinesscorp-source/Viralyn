@@ -64,6 +64,7 @@ Table client unifiée — profil, config créative, contacts, liens campagnes/pa
 | Is_Active          | Checkbox        | Produit actif                                |
 | Visual_Keywords    | Single line text| Mots-clés pour génération d'image            |
 | Customer_ID        | Single line text| Lien vers Customers                          |
+| Customer_Name      | Single line text| Nom commercial du client                     |
 | **Last_Featured_Date** | **Date**    | **Dernière mise en avant — rotation produit** |
 
 ### Table: `Content_Pipeline` (tbl6OlJbVl9XV8Tw3)
