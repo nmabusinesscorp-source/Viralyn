@@ -43,6 +43,7 @@
             "Prompt_Text": "={{ $json.body.customer.Prompt_Text }}",
             "Customer_Status": "={{ $json.body.customer.Customer_Status }}",
             "Source_URL": "={{ $json.body.customer.Source_URL }}",
+            "Logo_URL": "={{ $json.body.customer.Logo_URL }}",
             "Platform": "={{ $json.body.customer.Platform }}"
           }
         },
