@@ -78,8 +78,9 @@ IMPORTANT pour le Logo :
 - L'URL doit être ABSOLUE (commencer par https://) et pointer directement vers un fichier image
 - Si tu trouves plusieurs candidats, prends le logo principal du header en priorité
 
-IMPORTANT : Retourne UNIQUEMENT le JSON, sans texte autour. Si tu inclus du texte explicatif, mets-le avant le JSON.
-Le JSON final doit être dans un bloc \`\`\`json ... \`\`\`.`;
+IMPORTANT : Retourne TOUJOURS le JSON structuré, même si le site est inaccessible ou introuvable.
+Si le site n'est pas accessible, remplis les champs avec les meilleures estimations basées sur le nom/URL et mets tous les confidence_scores à 0.
+Le JSON final DOIT être dans un bloc \`\`\`json ... \`\`\`. Mets tout texte explicatif AVANT le bloc JSON.`;
 
 const QA_SYSTEM_PROMPT = `Tu es un contrôleur qualité pour des posts de réseaux sociaux.
 Tu reçois un post + les paramètres du client et tu évalues la qualité.

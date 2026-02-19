@@ -1,14 +1,22 @@
-// Test retry logic in n8n.js by mocking global fetch
+// Test retry logic in n8n.js by mocking undici fetch
 
-const originalFetch = global.fetch;
+jest.mock("undici", () => {
+  const mockFetch = jest.fn();
+  return {
+    fetch: mockFetch,
+    ProxyAgent: jest.fn(),
+  };
+});
+
+const { fetch: mockFetch } = require("undici");
 
 beforeEach(() => {
   jest.spyOn(console, "warn").mockImplementation();
   jest.spyOn(console, "log").mockImplementation();
+  mockFetch.mockReset();
 });
 
 afterEach(() => {
-  global.fetch = originalFetch;
   jest.restoreAllMocks();
 });
 
@@ -21,7 +29,7 @@ function loadN8N() {
 
 describe("callWebhook retry logic", () => {
   test("succeeds on first attempt", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: true,
       headers: { get: () => "application/json" },
       json: () => Promise.resolve({ success: true }),
@@ -31,11 +39,11 @@ describe("callWebhook retry logic", () => {
     const result = await callWebhook("test-path", { data: 1 });
 
     expect(result).toEqual({ success: true });
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   test("retries on network error and succeeds", async () => {
-    global.fetch = jest.fn()
+    mockFetch
       .mockRejectedValueOnce(new Error("ECONNRESET"))
       .mockResolvedValue({
         ok: true,
@@ -47,11 +55,11 @@ describe("callWebhook retry logic", () => {
     const result = await callWebhook("test-path", {});
 
     expect(result).toEqual({ success: true });
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   test("retries on 500 error and succeeds", async () => {
-    global.fetch = jest.fn()
+    mockFetch
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -68,11 +76,11 @@ describe("callWebhook retry logic", () => {
     const result = await callWebhook("test-path", {});
 
     expect(result).toEqual({ recovered: true });
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   test("does NOT retry on 400 client error", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: false,
       status: 400,
       statusText: "Bad Request",
@@ -81,15 +89,15 @@ describe("callWebhook retry logic", () => {
 
     const { callWebhook } = loadN8N();
     await expect(callWebhook("test-path", {})).rejects.toThrow("400");
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   test("gives up after MAX_RETRIES", async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error("ECONNREFUSED"));
+    mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
 
     const { callWebhook } = loadN8N();
     await expect(callWebhook("test-path", {})).rejects.toThrow("ECONNREFUSED");
     // 1 initial + 3 retries = 4 total
-    expect(global.fetch).toHaveBeenCalledTimes(4);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   }, 20_000);
 });

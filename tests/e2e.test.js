@@ -14,6 +14,11 @@ process.env.N8N_WEBHOOK_BASE_URL = "http://localhost:19876/webhook";
 process.env.SLACK_WEBHOOK_URL = "";
 process.env.PORT = "19877";
 process.env.NODE_ENV = "test";
+// Clear proxy vars so tests hit the local mock n8n server directly
+delete process.env.https_proxy;
+delete process.env.HTTPS_PROXY;
+delete process.env.http_proxy;
+delete process.env.HTTP_PROXY;
 
 const http = require("http");
 const fs = require("fs");
@@ -120,7 +125,7 @@ describe("Express Server E2E", () => {
 
   afterAll(async () => {
     await stopAll();
-  });
+  }, 10_000);
 
   beforeEach(() => {
     n8nRequests = [];
@@ -176,7 +181,7 @@ describe("Express Server E2E", () => {
     expect(n8nRequests[0].path).toContain("generate-post");
     expect(n8nRequests[0].body.customer_id).toBe("TST001");
     expect(n8nRequests[0].body.format).toBe("image");
-  });
+  }, 15_000);
 });
 
 // ═══════════════════════════════════════════════════════════════

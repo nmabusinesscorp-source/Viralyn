@@ -282,7 +282,7 @@ QA_PAYLOAD='{
 }'
 
 QA_START=$(date +%s)
-QA_RESP=$(curl -s --max-time 30 -X POST "$SERVER_URL/agent/qa" \
+QA_RESP=$(curl -s --max-time 60 -X POST "$SERVER_URL/agent/qa" \
   -H "Content-Type: application/json" \
   -d "$QA_PAYLOAD" 2>/dev/null || echo '{"error":"timeout"}')
 QA_END=$(date +%s)

@@ -24,12 +24,23 @@ async function onboard({ url, name }) {
     userMessage,
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 10 }],
     maxIterations: 15,
+    maxTokens: 16384,
   });
 
-  console.log(`[Onboarder] Claude response received (${result.usage?.input_tokens || "?"}in / ${result.usage?.output_tokens || "?"}out tokens)`);
+  console.log(`[Onboarder] Claude response received (${result.usage?.input_tokens || "?"}in / ${result.usage?.output_tokens || "?"}out tokens, stop: ${result.stopReason || "?"})`);
 
-  // Parse the JSON from the response
-  const data = extractJSON(result.text);
+  if (result.stopReason === "max_tokens") {
+    console.warn("[Onboarder] Warning: response was truncated (max_tokens reached)");
+  }
+
+  // Parse the JSON from the response — fall back to minimal profile if site was inaccessible
+  let data;
+  try {
+    data = extractJSON(result.text);
+  } catch (extractErr) {
+    console.warn(`[Onboarder] ${extractErr.message} — creating fallback profile`);
+    data = buildFallbackProfile(url, name);
+  }
 
   // Validate required fields
   validateOnboardingData(data);
@@ -85,26 +96,54 @@ Retourne le JSON structuré complet.`;
 }
 
 function extractJSON(text) {
+  if (!text || text.trim().length === 0) {
+    throw new Error("No valid JSON found in agent response (empty text)");
+  }
+
   // Try to extract JSON from markdown code block first
   const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
     try {
       return JSON.parse(codeBlockMatch[1].trim());
     } catch (err) {
+      // Code block found but JSON is invalid — try to find a nested JSON object inside it
+      const nestedMatch = codeBlockMatch[1].match(/\{[\s\S]*\}/);
+      if (nestedMatch) {
+        try {
+          return JSON.parse(nestedMatch[0]);
+        } catch (_) {
+          // fall through
+        }
+      }
       throw new Error(`Failed to parse JSON from code block: ${err.message}`);
     }
   }
 
-  // Try to find a raw JSON object
+  // Try to find the last complete JSON object (in case there's explanatory text before it)
+  const jsonMatches = [...text.matchAll(/\{[\s\S]*?\}(?=\s*$|\s*\n\s*\n)/g)];
+  if (jsonMatches.length > 0) {
+    // Try the last match first (most likely the final JSON output)
+    for (let i = jsonMatches.length - 1; i >= 0; i--) {
+      try {
+        return JSON.parse(jsonMatches[i][0]);
+      } catch (_) {
+        continue;
+      }
+    }
+  }
+
+  // Fallback: try greedy match for any JSON object
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       return JSON.parse(jsonMatch[0]);
     } catch (err) {
+      console.error(`[Onboarder] JSON parse failed. Raw text (first 500 chars): ${text.slice(0, 500)}`);
       throw new Error(`Failed to parse raw JSON from response: ${err.message}`);
     }
   }
 
+  console.error(`[Onboarder] No JSON found in response. Full text (first 1000 chars): ${text.slice(0, 1000)}`);
   throw new Error("No valid JSON found in agent response");
 }
 
@@ -122,6 +161,33 @@ function validateOnboardingData(data) {
       console.warn(`[Onboarder] Warning: missing customer field "${field}"`);
     }
   }
+}
+
+function buildFallbackProfile(url, name) {
+  const domain = new URL(url).hostname.replace("www.", "");
+  const guessedName = name || domain.split(".")[0].replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const id = guessedName.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase().padEnd(3, "X") + "001";
+
+  return {
+    customer: {
+      Customer_Name: guessedName,
+      Customer_ID: id,
+      Customer_Market: "Indéterminé - Site non accessible",
+      Customer_Adress: "",
+      CTA: "Découvrez",
+      Mood: "Indéterminé",
+      Visual_type: "generic",
+      Color_Set: "#333333,#FFFFFF",
+      Post_Frequency_Weekly: 3,
+      Prompt_Text: `Crée un post engageant pour {product_name}. Description : {product_description}`,
+      Customer_Status: "En review",
+      Source_URL: url,
+      Logo_URL: "",
+      Platform: "Instagram",
+    },
+    products: [],
+    confidence_scores: { name: 0.3, address: 0, products: 0, colors: 0, mood: 0 },
+  };
 }
 
 function buildSlackNotification(data) {

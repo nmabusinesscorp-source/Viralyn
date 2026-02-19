@@ -76,10 +76,12 @@ app.post("/agent/qa", async (req, res) => {
   try {
     console.log(`[Server] POST /agent/qa — post_id=${post_id}`);
     const result = await evaluatePost({ post_id, post_text, prompt_visual, product_name, customer });
+    // Always return the QA verdict — n8n failure is non-critical
     if (!result.success) {
-      return res.status(503).json({ error: "QA result could not be saved to Airtable", details: result.n8nResult });
+      res.status(207).json(result);
+    } else {
+      res.json(result);
     }
-    res.json(result);
   } catch (err) {
     console.error(`[Server] QA error: ${err.message}`);
     res.status(500).json({ error: "Internal server error" });
