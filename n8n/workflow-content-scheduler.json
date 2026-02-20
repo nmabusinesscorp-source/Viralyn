@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-02-18T15:07:02.023Z",
+  "createdAt": "2026-02-18T08:21:56.722Z",
+  "id": "nlzX5iSEDYvnag4L",
   "name": "Viralyn — Content Scheduler",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -16,14 +22,24 @@
       "name": "Daily 06:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 400]
+      "position": [
+        0,
+        400
+      ]
     },
-
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
-        "table": { "__rl": true, "mode": "id", "value": "Customers" },
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appGeibRFjtIvEGll"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Customers"
+        },
         "filterByFormula": "={Customer_Status} = 'Actif'",
         "options": {}
       },
@@ -31,15 +47,30 @@
       "name": "Get Active Clients",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [260, 400],
-      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+      "position": [
+        260,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YtjWlkMv0kUOReCD",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
     },
-
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
-        "table": { "__rl": true, "mode": "id", "value": "Slot_Settings" },
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appGeibRFjtIvEGll"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Slot_Settings"
+        },
         "filterByFormula": "={Active} = TRUE()",
         "options": {}
       },
@@ -47,15 +78,30 @@
       "name": "Get All Slot Settings",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [260, 640],
-      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+      "position": [
+        260,
+        640
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YtjWlkMv0kUOReCD",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
     },
-
     {
       "parameters": {
         "operation": "search",
-        "base": { "__rl": true, "mode": "id", "value": "appGeibRFjtIvEGll" },
-        "table": { "__rl": true, "mode": "id", "value": "Customer_Campaigns" },
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appGeibRFjtIvEGll"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Customer_Campaigns"
+        },
         "filterByFormula": "=AND({Status} = 'Active', {Posts_Generated} < {Posts_Needed})",
         "options": {}
       },
@@ -63,32 +109,47 @@
       "name": "Get Active Campaigns",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [260, 880],
-      "credentials": { "airtableTokenApi": { "id": "REPLACE", "name": "Airtable" } }
+      "position": [
+        260,
+        880
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YtjWlkMv0kUOReCD",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
     },
-
     {
       "parameters": {
-        "jsCode": "// ─── Plan Generation Tasks ──────────────────────────────────\n// Fetches all data, plans what to generate for today\n\nconst clients = $('Get Active Clients').all().map(i => i.json);\nconst allSlots = $('Get All Slot Settings').all().map(i => i.json);\nconst campaigns = $('Get Active Campaigns').all().map(i => i.json);\n\nconst now = new Date();\nconst todayDow = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat\nconst todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD\nconst tz = 'Europe/Zurich';\n\nconst tasks = [];\n\nfor (const client of clients) {\n  const customerId = client.Customer_ID;\n  \n  // Get today's slots for this client\n  const clientSlots = allSlots.filter(s => \n    s.Customer_ID === customerId && \n    (s.Day_of_Week === todayDow || s.dayOfWeek === todayDow)\n  );\n  \n  if (clientSlots.length === 0) continue;\n  \n  // Check for active campaigns for this client\n  const clientCampaigns = campaigns.filter(c => {\n    // Campaign may link to customer by name or ID\n    const campCustomer = Array.isArray(c.Customer_Name) ? c.Customer_Name : [c.Customer_Name];\n    return campCustomer.some(cn => cn === client.Customer_Name || cn === customerId);\n  });\n  \n  // Sort slots by time\n  clientSlots.sort((a, b) => (a.Time || '00:00').localeCompare(b.Time || '00:00'));\n  \n  for (let i = 0; i < clientSlots.length; i++) {\n    const slot = clientSlots[i];\n    const slotTime = slot.Time || '12:00';\n    const slotDateTime = `${todayStr}T${slotTime}:00+01:00`;\n    \n    // Determine format: alternate image/video\n    // Pattern: every 3rd slot is video (index 2, 5, 8...)\n    // For 1-2 slots/day: always image (video via separate scheduling)\n    const isVideoSlot = (clientSlots.length >= 3) && (i % 3 === 2);\n    \n    const format = isVideoSlot ? 'video' : 'image';\n    \n    // Check if campaign should fill this slot\n    let source = 'Rotation';\n    let campaignId = '';\n    let brief = '';\n    let productName = '';\n    \n    if (clientCampaigns.length > 0) {\n      // Campaign slots take priority (fill first N slots with campaign content)\n      const campaign = clientCampaigns[0]; // Highest priority campaign\n      const remaining = (campaign.Posts_Needed || 0) - (campaign.Posts_Generated || 0);\n      \n      if (remaining > 0) {\n        source = 'Campaign';\n        campaignId = campaign.Campaign_Title || '';\n        brief = campaign.Brief || campaign.Objectives || '';\n        // Don't specify product — let rotation handle it even for campaigns\n      }\n    }\n    \n    tasks.push({\n      json: {\n        customer_id: customerId,\n        customer_name: client.Customer_Name,\n        format: format,\n        source: source,\n        campaign_id: campaignId,\n        product_name: productName,\n        brief: brief,\n        slot_time: slotDateTime,\n        slot_index: i,\n        total_slots: clientSlots.length\n      }\n    });\n  }\n}\n\nif (tasks.length === 0) {\n  // No tasks for today — return empty to stop the workflow\n  return [{ json: { _no_tasks: true, message: `No slots for day ${todayDow}` } }];\n}\n\nreturn tasks;"
+        "jsCode": "// ─── Plan Generation Tasks ──────────────────────────────────\n// Fetches all data, plans what to generate for today\n\nconst clients = $('Get Active Clients').all().map(i => i.json);\nconst allSlots = $('Get All Slot Settings').all().map(i => i.json);\nconst campaigns = $('Get Active Campaigns').all().map(i => i.json);\n\nconst now = new Date();\nconst todayDow = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat\nconst todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD\nconst tz = 'Europe/Zurich';\n\nconst tasks = [];\n\nfor (const client of clients) {\n  const customerId = client.Customer_ID;\n  \n  // Get today's slots for this client\n  const clientSlots = allSlots.filter(s => \n    s.Customer_ID === customerId && \n    (s.Day_of_Week === todayDow || s.dayOfWeek === todayDow)\n  );\n  \n  if (clientSlots.length === 0) continue;\n  \n  // Check for active campaigns for this client\n  const clientCampaigns = campaigns.filter(c => {\n    // Campaign may link to customer by name or ID\n    const campCustomer = Array.isArray(c.Customer_Name) ? c.Customer_Name : [c.Customer_Name];\n    return campCustomer.some(cn => cn === client.Customer_Name || cn === customerId);\n  });\n  \n  // Sort slots by time\n  clientSlots.sort((a, b) => (a.Time || '00:00').localeCompare(b.Time || '00:00'));\n  \n  for (let i = 0; i < clientSlots.length; i++) {\n    const slot = clientSlots[i];\n    const slotTime = slot.Time || '12:00';\n    const slotDateTime = `${todayStr}T${slotTime}:00+01:00`;\n    \n    // Determine format: alternate image/video\n    // Pattern: image, image, video, image, video (for 5 slots)\n    // For fewer slots: mostly images, last one video\n    const isVideoSlot = (clientSlots.length <= 2) \n      ? (i === clientSlots.length - 1) // last slot = video\n      : (i % 3 === 2); // every 3rd slot = video\n    \n    const format = isVideoSlot ? 'video' : 'image';\n    \n    // Check if campaign should fill this slot\n    let source = 'Rotation';\n    let campaignId = '';\n    let brief = '';\n    let productName = '';\n    \n    if (clientCampaigns.length > 0) {\n      // Campaign slots take priority (fill first N slots with campaign content)\n      const campaign = clientCampaigns[0]; // Highest priority campaign\n      const remaining = (campaign.Posts_Needed || 0) - (campaign.Posts_Generated || 0);\n      \n      if (remaining > 0) {\n        source = campaign.Source || 'Planifiée';\n        campaignId = campaign.Campaign_Title || '';\n        brief = campaign.Brief || campaign.Objectives || '';\n        // Don't specify product — let rotation handle it even for campaigns\n      }\n    }\n    \n    tasks.push({\n      json: {\n        customer_id: customerId,\n        customer_name: client.Customer_Name,\n        format: format,\n        source: source,\n        campaign_id: campaignId,\n        product_name: productName,\n        brief: brief,\n        slot_time: slotDateTime,\n        slot_index: i,\n        total_slots: clientSlots.length\n      }\n    });\n  }\n}\n\nif (tasks.length === 0) {\n  // No tasks for today — return empty to stop the workflow\n  return [{ json: { _no_tasks: true, message: `No slots for day ${todayDow}` } }];\n}\n\nreturn tasks;"
       },
       "id": "code-plan-tasks",
       "name": "Plan Generation Tasks",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [580, 400]
+      "position": [
+        580,
+        400
+      ]
     },
-
     {
       "parameters": {
         "conditions": {
-          "options": { "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
           "combinator": "and",
           "conditions": [
             {
               "id": "has-tasks",
               "leftValue": "={{ $json._no_tasks }}",
               "rightValue": true,
-              "operator": { "type": "boolean", "operation": "notTrue" }
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
             }
           ]
         }
@@ -97,9 +158,11 @@
       "name": "Has Tasks?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [840, 400]
+      "position": [
+        840,
+        400
+      ]
     },
-
     {
       "parameters": {
         "batchSize": 1,
@@ -109,9 +172,11 @@
       "name": "Process One by One",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [1100, 300]
+      "position": [
+        1100,
+        300
+      ]
     },
-
     {
       "parameters": {
         "method": "POST",
@@ -127,9 +192,11 @@
       "name": "Call Generate Post",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1360, 300]
+      "position": [
+        1360,
+        300
+      ]
     },
-
     {
       "parameters": {
         "amount": 10,
@@ -139,89 +206,602 @@
       "name": "Wait 10s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1620, 300]
+      "position": [
+        1620,
+        300
+      ]
     },
-
     {
-      "parameters": {},
+      "parameters": {
+        "content": "## Viralyn — Content Scheduler\n\n**Trigger:** Daily at 06:00 Europe/Zurich\n\n**Flow:**\n1. Fetch all active clients\n2. Fetch all slot settings + active campaigns\n3. Code: plan generation tasks for today\n   - Match clients to their slots for today's day of week\n   - Alternate image/video formats\n   - Check campaign priority\n4. Call Generate Post webhook for each task\n5. Wait 10s between each (rate limit protection)\n\n**Format alternation:**\n- ≤2 slots: derniers = video\n- 3+ slots: chaque 3ème = video\n- Ex: 5 slots → image, image, video, image, video"
+      },
       "id": "note-scheduler",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-60, 120],
-      "parameters_extra": {
-        "content": "## Viralyn — Content Scheduler\n\n**Trigger:** Daily at 06:00 Europe/Zurich\n\n**Flow:**\n1. Fetch all active clients\n2. Fetch all slot settings + active campaigns\n3. Code: plan generation tasks for today\n   - Match clients to their slots for today's day of week\n   - Alternate image/video formats\n   - Check campaign priority\n4. Call Generate Post webhook for each task\n5. Wait 10s between each (rate limit protection)\n\n**Format alternation:**\n- ≤2 slots: derniers = video\n- 3+ slots: chaque 3ème = video\n- Ex: 5 slots → image, image, video, image, video"
-      }
+      "position": [
+        -60,
+        120
+      ]
     },
-
     {
-      "parameters": {},
+      "parameters": {
+        "content": "**Aucun slot aujourd'hui**\nWorkflow s'arrête proprement."
+      },
       "id": "note-no-tasks",
       "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [780, 540],
-      "parameters_extra": {
-        "content": "**Aucun slot aujourd'hui**\nWorkflow s'arrête proprement."
-      }
+      "position": [
+        780,
+        540
+      ]
     }
   ],
   "connections": {
     "Daily 06:00": {
-      "main": [[
-        { "node": "Get Active Clients", "type": "main", "index": 0 },
-        { "node": "Get All Slot Settings", "type": "main", "index": 0 },
-        { "node": "Get Active Campaigns", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Get Active Clients",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get All Slot Settings",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Active Campaigns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get Active Clients": {
-      "main": [[
-        { "node": "Plan Generation Tasks", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Plan Generation Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get All Slot Settings": {
-      "main": [[
-        { "node": "Plan Generation Tasks", "type": "main", "index": 1 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Plan Generation Tasks",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
     },
     "Get Active Campaigns": {
-      "main": [[
-        { "node": "Plan Generation Tasks", "type": "main", "index": 2 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Plan Generation Tasks",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
     },
     "Plan Generation Tasks": {
-      "main": [[
-        { "node": "Has Tasks?", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Has Tasks?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Has Tasks?": {
       "main": [
-        [{ "node": "Process One by One", "type": "main", "index": 0 }],
+        [
+          {
+            "node": "Process One by One",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Process One by One": {
       "main": [
-        [{ "node": "Call Generate Post", "type": "main", "index": 0 }],
+        [
+          {
+            "node": "Call Generate Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Call Generate Post": {
-      "main": [[
-        { "node": "Wait 10s", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Wait 10s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Wait 10s": {
-      "main": [[
-        { "node": "Process One by One", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Process One by One",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "tags": [
-    { "name": "viralyn" },
-    { "name": "scheduler" }
-  ]
+  "staticData": {
+    "node:Daily 06:00": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "87198fe1-6ea1-485b-95ee-350842bd25e7",
+  "activeVersionId": "87198fe1-6ea1-485b-95ee-350842bd25e7",
+  "versionCounter": 21,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-18T08:24:04.549Z",
+      "createdAt": "2026-02-18T08:24:04.549Z",
+      "role": "workflow:owner",
+      "workflowId": "nlzX5iSEDYvnag4L",
+      "projectId": "JO6vprGyE2hiBoXD",
+      "project": {
+        "updatedAt": "2025-09-09T09:29:11.704Z",
+        "createdAt": "2025-09-09T09:17:02.721Z",
+        "id": "JO6vprGyE2hiBoXD",
+        "name": "Nicolas Maeder <maedern@hotmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "56ba2716-b530-465c-a0e2-b8f37170b074",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-09-09T09:17:02.721Z",
+            "createdAt": "2025-09-09T09:17:02.721Z",
+            "userId": "56ba2716-b530-465c-a0e2-b8f37170b074",
+            "projectId": "JO6vprGyE2hiBoXD",
+            "user": {
+              "updatedAt": "2026-02-20T09:26:19.000Z",
+              "createdAt": "2025-09-09T09:17:02.116Z",
+              "id": "56ba2716-b530-465c-a0e2-b8f37170b074",
+              "email": "maedern@hotmail.com",
+              "firstName": "Nicolas",
+              "lastName": "Maeder",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-09-09T09:29:47.369Z",
+                "personalization_survey_n8n_version": "1.110.1",
+                "companySize": "<20",
+                "companyType": "systems-integrator",
+                "role": "business-owner",
+                "reportedSource": "youtube"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "7FkjRrhz8DpOHWeY",
+                "userActivatedAt": 1759330234733,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1759597982569
+                },
+                "dismissedCallouts": {
+                  "preBuiltAgentsCalloutGoogleDrive": true,
+                  "preBuiltAgentsCalloutHttpRequest": true,
+                  "preBuiltAgentsCalloutTelegram": true
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-02-19",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-18T15:07:02.026Z",
+    "createdAt": "2026-02-18T15:07:02.026Z",
+    "versionId": "87198fe1-6ea1-485b-95ee-350842bd25e7",
+    "workflowId": "nlzX5iSEDYvnag4L",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "triggerAtHour": 6,
+                "triggerAtMinute": 0
+              }
+            ]
+          }
+        },
+        "id": "schedule-trigger",
+        "name": "Daily 06:00",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "mode": "id",
+            "value": "appGeibRFjtIvEGll"
+          },
+          "table": {
+            "__rl": true,
+            "mode": "id",
+            "value": "Customers"
+          },
+          "filterByFormula": "={Customer_Status} = 'Actif'",
+          "options": {}
+        },
+        "id": "at-active-clients",
+        "name": "Get Active Clients",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          260,
+          400
+        ],
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "YtjWlkMv0kUOReCD",
+            "name": "Airtable Personal Access Token account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "mode": "id",
+            "value": "appGeibRFjtIvEGll"
+          },
+          "table": {
+            "__rl": true,
+            "mode": "id",
+            "value": "Slot_Settings"
+          },
+          "filterByFormula": "={Active} = TRUE()",
+          "options": {}
+        },
+        "id": "at-all-slots",
+        "name": "Get All Slot Settings",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          260,
+          640
+        ],
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "YtjWlkMv0kUOReCD",
+            "name": "Airtable Personal Access Token account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "mode": "id",
+            "value": "appGeibRFjtIvEGll"
+          },
+          "table": {
+            "__rl": true,
+            "mode": "id",
+            "value": "Customer_Campaigns"
+          },
+          "filterByFormula": "=AND({Status} = 'Active', {Posts_Generated} < {Posts_Needed})",
+          "options": {}
+        },
+        "id": "at-active-campaigns",
+        "name": "Get Active Campaigns",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          260,
+          880
+        ],
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "YtjWlkMv0kUOReCD",
+            "name": "Airtable Personal Access Token account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// ─── Plan Generation Tasks ──────────────────────────────────\n// Fetches all data, plans what to generate for today\n\nconst clients = $('Get Active Clients').all().map(i => i.json);\nconst allSlots = $('Get All Slot Settings').all().map(i => i.json);\nconst campaigns = $('Get Active Campaigns').all().map(i => i.json);\n\nconst now = new Date();\nconst todayDow = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat\nconst todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD\nconst tz = 'Europe/Zurich';\n\nconst tasks = [];\n\nfor (const client of clients) {\n  const customerId = client.Customer_ID;\n  \n  // Get today's slots for this client\n  const clientSlots = allSlots.filter(s => \n    s.Customer_ID === customerId && \n    (s.Day_of_Week === todayDow || s.dayOfWeek === todayDow)\n  );\n  \n  if (clientSlots.length === 0) continue;\n  \n  // Check for active campaigns for this client\n  const clientCampaigns = campaigns.filter(c => {\n    // Campaign may link to customer by name or ID\n    const campCustomer = Array.isArray(c.Customer_Name) ? c.Customer_Name : [c.Customer_Name];\n    return campCustomer.some(cn => cn === client.Customer_Name || cn === customerId);\n  });\n  \n  // Sort slots by time\n  clientSlots.sort((a, b) => (a.Time || '00:00').localeCompare(b.Time || '00:00'));\n  \n  for (let i = 0; i < clientSlots.length; i++) {\n    const slot = clientSlots[i];\n    const slotTime = slot.Time || '12:00';\n    const slotDateTime = `${todayStr}T${slotTime}:00+01:00`;\n    \n    // Determine format: alternate image/video\n    // Pattern: image, image, video, image, video (for 5 slots)\n    // For fewer slots: mostly images, last one video\n    const isVideoSlot = (clientSlots.length <= 2) \n      ? (i === clientSlots.length - 1) // last slot = video\n      : (i % 3 === 2); // every 3rd slot = video\n    \n    const format = isVideoSlot ? 'video' : 'image';\n    \n    // Check if campaign should fill this slot\n    let source = 'Rotation';\n    let campaignId = '';\n    let brief = '';\n    let productName = '';\n    \n    if (clientCampaigns.length > 0) {\n      // Campaign slots take priority (fill first N slots with campaign content)\n      const campaign = clientCampaigns[0]; // Highest priority campaign\n      const remaining = (campaign.Posts_Needed || 0) - (campaign.Posts_Generated || 0);\n      \n      if (remaining > 0) {\n        source = campaign.Source || 'Planifiée';\n        campaignId = campaign.Campaign_Title || '';\n        brief = campaign.Brief || campaign.Objectives || '';\n        // Don't specify product — let rotation handle it even for campaigns\n      }\n    }\n    \n    tasks.push({\n      json: {\n        customer_id: customerId,\n        customer_name: client.Customer_Name,\n        format: format,\n        source: source,\n        campaign_id: campaignId,\n        product_name: productName,\n        brief: brief,\n        slot_time: slotDateTime,\n        slot_index: i,\n        total_slots: clientSlots.length\n      }\n    });\n  }\n}\n\nif (tasks.length === 0) {\n  // No tasks for today — return empty to stop the workflow\n  return [{ json: { _no_tasks: true, message: `No slots for day ${todayDow}` } }];\n}\n\nreturn tasks;"
+        },
+        "id": "code-plan-tasks",
+        "name": "Plan Generation Tasks",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          580,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "has-tasks",
+                "leftValue": "={{ $json._no_tasks }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "notTrue"
+                }
+              }
+            ]
+          }
+        },
+        "id": "if-has-tasks",
+        "name": "Has Tasks?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          840,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "batchSize": 1,
+          "options": {}
+        },
+        "id": "batch-tasks",
+        "name": "Process One by One",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          1100,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://n8n.srv1000420.hstgr.cloud/webhook/generate-post",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"customer_id\": {{ JSON.stringify($json.customer_id) }},\n  \"format\": {{ JSON.stringify($json.format) }},\n  \"source\": {{ JSON.stringify($json.source) }},\n  \"campaign_id\": {{ JSON.stringify($json.campaign_id) }},\n  \"product_name\": {{ JSON.stringify($json.product_name) }},\n  \"brief\": {{ JSON.stringify($json.brief) }},\n  \"slot_time\": {{ JSON.stringify($json.slot_time) }}\n}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "http-generate",
+        "name": "Call Generate Post",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1360,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 10,
+          "unit": "seconds"
+        },
+        "id": "wait-rate-limit",
+        "name": "Wait 10s",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          1620,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## Viralyn — Content Scheduler\n\n**Trigger:** Daily at 06:00 Europe/Zurich\n\n**Flow:**\n1. Fetch all active clients\n2. Fetch all slot settings + active campaigns\n3. Code: plan generation tasks for today\n   - Match clients to their slots for today's day of week\n   - Alternate image/video formats\n   - Check campaign priority\n4. Call Generate Post webhook for each task\n5. Wait 10s between each (rate limit protection)\n\n**Format alternation:**\n- ≤2 slots: derniers = video\n- 3+ slots: chaque 3ème = video\n- Ex: 5 slots → image, image, video, image, video"
+        },
+        "id": "note-scheduler",
+        "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -60,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "content": "**Aucun slot aujourd'hui**\nWorkflow s'arrête proprement."
+        },
+        "id": "note-no-tasks",
+        "name": "Sticky Note1",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          780,
+          540
+        ]
+      }
+    ],
+    "connections": {
+      "Daily 06:00": {
+        "main": [
+          [
+            {
+              "node": "Get Active Clients",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Get All Slot Settings",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Get Active Campaigns",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Active Clients": {
+        "main": [
+          [
+            {
+              "node": "Plan Generation Tasks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get All Slot Settings": {
+        "main": [
+          [
+            {
+              "node": "Plan Generation Tasks",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Get Active Campaigns": {
+        "main": [
+          [
+            {
+              "node": "Plan Generation Tasks",
+              "type": "main",
+              "index": 2
+            }
+          ]
+        ]
+      },
+      "Plan Generation Tasks": {
+        "main": [
+          [
+            {
+              "node": "Has Tasks?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Tasks?": {
+        "main": [
+          [
+            {
+              "node": "Process One by One",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Process One by One": {
+        "main": [
+          [
+            {
+              "node": "Call Generate Post",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Call Generate Post": {
+        "main": [
+          [
+            {
+              "node": "Wait 10s",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait 10s": {
+        "main": [
+          [
+            {
+              "node": "Process One by One",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Nicolas Maeder",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-18T15:07:02.060Z",
+        "id": 146,
+        "workflowId": "nlzX5iSEDYvnag4L",
+        "versionId": "87198fe1-6ea1-485b-95ee-350842bd25e7",
+        "event": "activated",
+        "userId": "56ba2716-b530-465c-a0e2-b8f37170b074"
+      },
+      {
+        "createdAt": "2026-02-18T15:07:02.755Z",
+        "id": 147,
+        "workflowId": "nlzX5iSEDYvnag4L",
+        "versionId": "87198fe1-6ea1-485b-95ee-350842bd25e7",
+        "event": "activated",
+        "userId": "56ba2716-b530-465c-a0e2-b8f37170b074"
+      }
+    ]
+  }
 }
