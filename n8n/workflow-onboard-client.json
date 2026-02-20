@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-02-18T16:28:14.357Z",
+  "updatedAt": "2026-02-20T10:00:00.000Z",
   "createdAt": "2026-02-18T15:06:53.725Z",
   "id": "DeD0uJgI5D3dWi6i",
   "name": "Viralyn — Onboard Client",
@@ -66,8 +66,8 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        528,
-        184
+        480,
+        304
       ],
       "credentials": {
         "airtableTokenApi": {
@@ -83,19 +83,25 @@
             {
               "id": "p1",
               "name": "products",
-              "value": "={{ $json.body.products }}",
+              "value": "={{ $('Webhook Onboard').first().json.body.products }}",
               "type": "array"
             },
             {
               "id": "p2",
               "name": "customer_id",
-              "value": "={{ $json.body.customer.Customer_ID }}",
+              "value": "={{ $('Webhook Onboard').first().json.body.customer.Customer_ID }}",
               "type": "string"
             },
             {
               "id": "p3",
               "name": "customer_name",
-              "value": "={{ $json.body.customer.Customer_Name }}",
+              "value": "={{ $('Webhook Onboard').first().json.body.customer.Customer_Name }}",
+              "type": "string"
+            },
+            {
+              "id": "p4",
+              "name": "customer_record_id",
+              "value": "={{ $json.id }}",
               "type": "string"
             }
           ]
@@ -107,8 +113,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        528,
-        424
+        720,
+        304
       ]
     },
     {
@@ -123,8 +129,8 @@
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
       "position": [
-        752,
-        424
+        960,
+        304
       ]
     },
     {
@@ -150,7 +156,8 @@
             "Is_Active": "={{ $json.Is_Active }}",
             "Visual_Keywords": "={{ $json.Visual_Keywords }}",
             "Customer_ID": "={{ $json.customer_id }}",
-            "Customer_Name": "={{ $json.customer_name }}"
+            "Customer_Name": "={{ $json.customer_name }}",
+            "Customer": "={{ [$json.customer_record_id] }}"
           }
         },
         "options": {}
@@ -160,8 +167,8 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        960,
-        424
+        1200,
+        304
       ],
       "credentials": {
         "airtableTokenApi": {
@@ -173,7 +180,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: true, customer_id: $(\"Webhook Onboard\").item.json.body.customer.Customer_ID, message: \"Customer and products created in unified Customers table\" }) }}",
+        "responseBody": "={{ JSON.stringify({ success: true, customer_id: $(\"Webhook Onboard\").item.json.body.customer.Customer_ID, products_created: $input.all().length, message: \"Customer and products created in unified Customers table\" }) }}",
         "options": {}
       },
       "id": "a1000001-0001-0001-0001-000000000007",
@@ -181,8 +188,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        960,
-        184
+        1440,
+        304
       ]
     }
   ],
@@ -194,11 +201,6 @@
             "node": "Create Customer",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Set Products Data",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -207,7 +209,7 @@
       "main": [
         [
           {
-            "node": "Respond Success",
+            "node": "Set Products Data",
             "type": "main",
             "index": 0
           }
@@ -230,6 +232,17 @@
         [
           {
             "node": "Create Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Products": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
             "type": "main",
             "index": 0
           }
@@ -314,7 +327,7 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-02-18T15:06:53.729Z",
+    "updatedAt": "2026-02-20T10:00:00.000Z",
     "createdAt": "2026-02-18T15:06:53.729Z",
     "versionId": "eb8737f0-2287-4cd7-893f-0604a7118714",
     "workflowId": "DeD0uJgI5D3dWi6i",
@@ -378,8 +391,8 @@
         "type": "n8n-nodes-base.airtable",
         "typeVersion": 2.1,
         "position": [
-          528,
-          184
+          480,
+          304
         ],
         "credentials": {
           "airtableTokenApi": {
@@ -395,19 +408,25 @@
               {
                 "id": "p1",
                 "name": "products",
-                "value": "={{ $json.body.products }}",
+                "value": "={{ $('Webhook Onboard').first().json.body.products }}",
                 "type": "array"
               },
               {
                 "id": "p2",
                 "name": "customer_id",
-                "value": "={{ $json.body.customer.Customer_ID }}",
+                "value": "={{ $('Webhook Onboard').first().json.body.customer.Customer_ID }}",
                 "type": "string"
               },
               {
                 "id": "p3",
                 "name": "customer_name",
-                "value": "={{ $json.body.customer.Customer_Name }}",
+                "value": "={{ $('Webhook Onboard').first().json.body.customer.Customer_Name }}",
+                "type": "string"
+              },
+              {
+                "id": "p4",
+                "name": "customer_record_id",
+                "value": "={{ $json.id }}",
                 "type": "string"
               }
             ]
@@ -419,8 +438,8 @@
         "type": "n8n-nodes-base.set",
         "typeVersion": 3.4,
         "position": [
-          528,
-          424
+          720,
+          304
         ]
       },
       {
@@ -435,8 +454,8 @@
         "type": "n8n-nodes-base.splitOut",
         "typeVersion": 1,
         "position": [
-          752,
-          424
+          960,
+          304
         ]
       },
       {
@@ -462,7 +481,8 @@
               "Is_Active": "={{ $json.Is_Active }}",
               "Visual_Keywords": "={{ $json.Visual_Keywords }}",
               "Customer_ID": "={{ $json.customer_id }}",
-              "Customer_Name": "={{ $json.customer_name }}"
+              "Customer_Name": "={{ $json.customer_name }}",
+              "Customer": "={{ [$json.customer_record_id] }}"
             }
           },
           "options": {}
@@ -472,8 +492,8 @@
         "type": "n8n-nodes-base.airtable",
         "typeVersion": 2.1,
         "position": [
-          960,
-          424
+          1200,
+          304
         ],
         "credentials": {
           "airtableTokenApi": {
@@ -485,7 +505,7 @@
       {
         "parameters": {
           "respondWith": "json",
-          "responseBody": "={{ JSON.stringify({ success: true, customer_id: $(\"Webhook Onboard\").item.json.body.customer.Customer_ID, message: \"Customer and products created in unified Customers table\" }) }}",
+          "responseBody": "={{ JSON.stringify({ success: true, customer_id: $(\"Webhook Onboard\").item.json.body.customer.Customer_ID, products_created: $input.all().length, message: \"Customer and products created in unified Customers table\" }) }}",
           "options": {}
         },
         "id": "a1000001-0001-0001-0001-000000000007",
@@ -493,8 +513,8 @@
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
         "position": [
-          960,
-          184
+          1440,
+          304
         ]
       }
     ],
@@ -506,11 +526,6 @@
               "node": "Create Customer",
               "type": "main",
               "index": 0
-            },
-            {
-              "node": "Set Products Data",
-              "type": "main",
-              "index": 0
             }
           ]
         ]
@@ -519,7 +534,7 @@
         "main": [
           [
             {
-              "node": "Respond Success",
+              "node": "Set Products Data",
               "type": "main",
               "index": 0
             }
@@ -542,6 +557,17 @@
           [
             {
               "node": "Create Products",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Products": {
+        "main": [
+          [
+            {
+              "node": "Respond Success",
               "type": "main",
               "index": 0
             }
