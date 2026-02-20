@@ -94,12 +94,6 @@
             },
             {
               "id": "p3",
-              "name": "customer_name",
-              "value": "={{ $('Webhook Onboard').first().json.body.customer.Customer_Name }}",
-              "type": "string"
-            },
-            {
-              "id": "p4",
               "name": "customer_record_id",
               "value": "={{ $json.id }}",
               "type": "string"
@@ -156,7 +150,6 @@
             "Is_Active": "={{ $json.Is_Active }}",
             "Visual_Keywords": "={{ $json.Visual_Keywords }}",
             "Customer_ID": "={{ $json.customer_id }}",
-            "Customer_Name": "={{ $json.customer_name }}",
             "Customer": "={{ [$json.customer_record_id] }}"
           }
         },
