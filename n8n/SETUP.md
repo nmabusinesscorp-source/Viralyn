@@ -29,7 +29,10 @@ Table client unifiée — profil, config créative, contacts, liens campagnes/pa
 | Customer_Phone                | Phone number          | Téléphone                                  |
 | Customer_Website              | URL                   | Site web                                   |
 | Telegram_Chat_ID              | Single line text      | ID Telegram pour demandes à la volée       |
-| Blotato_Client_ID             | Single line text      | ID Blotato                                 |
+| Blotato_Client_ID             | Single line text      | ID Blotato (legacy — fallback)             |
+| **Blotato_ID_Instagram**      | **Single line text**  | **ID Blotato pour Instagram**              |
+| **Blotato_ID_TikTok**         | **Single line text**  | **ID Blotato pour TikTok**                 |
+| **Platforms_Active**           | **Multiple select**   | **Plateformes actives (Instagram, TikTok)**|
 | Target_Personna               | Single line text      | Persona cible                              |
 | CTA                           | Long text             | Call to action                             |
 | Mood                          | Long text             | Ton de communication                       |
@@ -133,6 +136,7 @@ Pipeline de contenu — du brouillon à la publication.
 | Status           | Single select   | Posted / Reserved / Available      |
 | Customer_ID_Text | Single line text| ID client                          |
 | Post_ID          | Single line text| ID du post associé                 |
+| **Platform**     | **Single select** | **Instagram / TikTok**           |
 
 ### Table: `Slot_Settings` (tbllHM4ThwRmD52e0)
 
@@ -145,6 +149,7 @@ Pipeline de contenu — du brouillon à la publication.
 | Time          | Single line text| Heure de publication (HH:mm)       |
 | TimeZone      | Single select   | Europe/Zurich                      |
 | Active        | Checkbox        | Créneau actif                      |
+| **Platform**  | **Single select** | **Instagram / TikTok (défaut: Instagram)** |
 
 ### Table: `System_Prompts` (tblfLIc6UFvVdUrRP)
 
@@ -186,8 +191,9 @@ Daily 06:00 (Europe/Zurich)
     Code: Plan Generation Tasks
     ├─ Match clients ↔ today's slots (Day_of_Week)
     ├─ Alternate formats: image/image/video pattern
+    ├─ Read Platform from Slot_Settings (default: Instagram for image, TikTok for video)
     ├─ Check campaign priority (Posts_Generated < Posts_Needed)
-    └─ Output: array of generation tasks
+    └─ Output: array of generation tasks (incl. platform per task)
          │
          ▼
     SplitInBatches → Call Generate Post → Wait 10s → Loop
@@ -205,6 +211,7 @@ Sub-workflow appelable par Scheduler, Telegram bot, ou API manuelle.
 POST /webhook/generate-post
 {
   "customer_id": "LOS-04899",
+  "platform": "Instagram" | "TikTok",   // NEW — routes prompts + Blotato ID
   "format": "image" | "video",
   "source": "Rotation" | "Campaign" | "Telegram",
   "product_name": "",    // auto-rotate if empty
@@ -220,7 +227,10 @@ POST /webhook/generate-post
     Code: Pick Product & Build Prompts
     ├─ Rotation: product with oldest Last_Featured_Date
     ├─ Or explicit product (campaign/telegram)
-    └─ Build Claude prompt with customer persona
+    ├─ Route Blotato ID per platform:
+    │   ├─ TikTok → Blotato_ID_TikTok (fallback: Blotato_Client_ID)
+    │   └─ Instagram → Blotato_ID_Instagram (fallback: Blotato_Client_ID)
+    └─ Build Claude prompt (platform-specific: TikTok UGC vs Instagram standard)
          │
          ▼
     HTTP Request: Claude API → JSON {post_text, prompt_visual, prompt_video}
@@ -231,7 +241,7 @@ POST /webhook/generate-post
          ▼
     Switch: Image or Video?
     ├─ Image → Gemini Imagen 3.0 (generate image)
-    └─ Video → Gemini Veo 2.0 (generate video 9:16, 8s)
+    └─ Video → Gemini Veo 2.0 (9:16, TikTok: 5-8s / Instagram: 5-15s)
          │
          ▼
     Merge Media
@@ -331,12 +341,18 @@ curl -X POST http://localhost:3000/agent/generate \
 │  │   ├─ Get Customer + Products           │                         │
 │  │   ├─ Product Rotation (or explicit)    │                         │
 │  │   ├─ Claude API → texte + prompts      │                         │
+│  │   │   (TikTok: UGC/hook style)         │                         │
+│  │   │   (Instagram: standard post style) │                         │
 │  │   ├─ Gemini Imagen → photo (1024px)    │ ← IMAGE branch         │
-│  │   ├─ Gemini Veo → vidéo (9:16, 8s)    │ ← VIDEO branch         │
+│  │   ├─ Gemini Veo → vidéo 9:16           │ ← VIDEO branch         │
+│  │   │   (TikTok: 5-8s / IG: 5-15s)      │                         │
 │  │   ├─ → Content_Pipeline (Draft)        │                         │
 │  │   ├─ → Product.Last_Featured_Date      │                         │
 │  │   ├─ → Publishing_Slot (Reserved)      │                         │
-│  │   └─ → /agent/qa (QA check)           │                         │
+│  │   ├─ Blotato ID routing per platform:  │                         │
+│  │   │   TikTok → Blotato_ID_TikTok      │                         │
+│  │   │   IG → Blotato_ID_Instagram        │                         │
+│  │   └─ → /agent/qa (platform-aware QA)  │                         │
 │  └────────────────────────────────────────┘                         │
 │                                                                      │
 │  ┌────────────────────────────────────────┐                         │
@@ -367,3 +383,47 @@ curl -X POST http://localhost:3000/agent/generate \
 │  └─ Telegram (client — confirmation post, future)                   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 6. Multi-Platform Support (Instagram + TikTok)
+
+### Routing Logic
+
+Le système route automatiquement le contenu par plateforme :
+
+| Paramètre | Instagram | TikTok |
+|-----------|-----------|--------|
+| **Blotato ID** | `Blotato_ID_Instagram` | `Blotato_ID_TikTok` |
+| **Fallback ID** | `Blotato_Client_ID` | `Blotato_Client_ID` |
+| **Caption length** | 40-100 mots | 15-50 mots |
+| **Ton** | Standard brand voice | UGC/authentique |
+| **Video duration** | 5-15s | 5-8s |
+| **Hashtags** | 5-8 fin de post | 3-5 trending + niche |
+
+### Platform-Specific Content Generation
+
+**Instagram:**
+- Hook → Corps (3-6 lignes) → CTA client
+- Emojis : 3-5 max, pertinents
+- Style : adapté au Mood client
+
+**TikTok:**
+- Hook CHOC <3 secondes → Corps ultra-concis (1-3 lignes) → CTA natif TikTok
+- Ton UGC, phrases courtes, punchlines
+- JAMAIS de langage corporate ou publicitaire
+
+### QA Criteria per Platform
+
+**Instagram QA** (pondération) :
+- product_named: 25%, cta_present: 15%, length: 10%, tone: 20%, writing: 15%, visual_prompt: 15%
+
+**TikTok QA** (pondération) :
+- hook_quality: 25%, product_named: 20%, cta_present: 10%, caption_brevity: 15%, ugc_tone: 15%, video_prompt: 15%
+
+### Configuration par client
+
+1. Ajouter les Blotato IDs dans `Customers` → `Blotato_ID_Instagram` / `Blotato_ID_TikTok`
+2. Activer les plateformes dans `Platforms_Active` (Multiple select)
+3. Configurer les slots dans `Slot_Settings` avec le champ `Platform` par créneau
+4. Le Content Scheduler routera automatiquement vers le bon pipeline

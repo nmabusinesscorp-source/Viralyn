@@ -1,6 +1,6 @@
 const { jsonChat } = require("../lib/claude");
 const { sendQAResult, notifySlack } = require("../lib/n8n");
-const { QA_SYSTEM_PROMPT } = require("../config/prompts");
+const { getQAPrompt } = require("../config/prompts");
 
 /**
  * Agent 2 — QA Controller
@@ -9,18 +9,19 @@ const { QA_SYSTEM_PROMPT } = require("../config/prompts");
  * the client's parameters (CTA, mood, product naming, etc.).
  * Pure reasoning — no tools needed.
  */
-async function evaluatePost({ post_id, post_text, prompt_visual, product_name, customer }) {
+async function evaluatePost({ post_id, post_text, prompt_visual, product_name, customer, platform }) {
   if (!post_id || !post_text) {
     throw new Error("Missing required fields: post_id, post_text");
   }
 
-  console.log(`[QA] Evaluating post ${post_id}...`);
+  const effectivePlatform = platform || 'Instagram';
+  console.log(`[QA] Evaluating post ${post_id} (${effectivePlatform})...`);
 
-  const userMessage = buildQAPrompt({ post_id, post_text, prompt_visual, product_name, customer });
+  const userMessage = buildQAPrompt({ post_id, post_text, prompt_visual, product_name, customer, platform: effectivePlatform });
 
-  // Single-turn JSON call — no tools needed
+  // Single-turn JSON call — platform-specific QA prompt
   const { data, usage } = await jsonChat({
-    systemPrompt: QA_SYSTEM_PROMPT,
+    systemPrompt: getQAPrompt(effectivePlatform),
     userMessage,
   });
 
@@ -55,10 +56,12 @@ async function evaluatePost({ post_id, post_text, prompt_visual, product_name, c
   };
 }
 
-function buildQAPrompt({ post_id, post_text, prompt_visual, product_name, customer }) {
-  return `Évalue la qualité du post suivant.
+function buildQAPrompt({ post_id, post_text, prompt_visual, product_name, customer, platform }) {
+  const platformLabel = platform === 'TikTok' ? 'TikTok' : 'Instagram';
+  return `Évalue la qualité du post ${platformLabel} suivant.
 
 POST ID : ${post_id}
+PLATEFORME : ${platformLabel}
 
 TEXTE DU POST :
 """
@@ -79,7 +82,7 @@ PARAMÈTRES CLIENT :
 - Style visuel : ${customer?.Visual_type || "N/A"}
 - Adresse : ${customer?.Customer_Adress || "N/A"}
 
-Évalue chaque critère et retourne le JSON de résultat.`;
+Évalue chaque critère selon les standards ${platformLabel} et retourne le JSON de résultat.`;
 }
 
 function validateQAResponse(data, postId) {
